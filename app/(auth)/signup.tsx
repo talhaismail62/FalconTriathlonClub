@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
+// Import the LinearGradient component
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Signup() {
   const router = useRouter();
@@ -30,7 +32,6 @@ export default function Signup() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      // Store the name in user metadata so the profile screen can read it.
       options: { data: { full_name: name } },
     });
     setLoading(false);
@@ -40,7 +41,6 @@ export default function Signup() {
       return;
     }
 
-    // If email confirmation is enabled in Supabase, there is no active session yet.
     if (!data.session) {
       Alert.alert(
         'Check your email',
@@ -54,17 +54,24 @@ export default function Signup() {
   }
 
   return (
-    <KeyboardAvoidingView
+    // Replaced the simple View container with the LinearGradient for the diagonal background
+    <LinearGradient
+      colors={['#fff', '#0d9488']} // White on top-left, Sea Green on bottom-right
+      start={{ x: 0.2, y: 0.2 }} // Adjusting start/end points creates the sharp diagonal split
+      end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
+      <KeyboardAvoidingView
+        style={styles.inner}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <Text style={styles.title}>Create account</Text>
         <Text style={styles.subtitle}>Join Falcon Triathlon Club</Text>
 
         <TextInput
           style={styles.input}
           placeholder="Full name"
+          placeholderTextColor="#94a3b8" // Slate color for placeholder text
           autoCapitalize="words"
           value={name}
           onChangeText={setName}
@@ -72,6 +79,7 @@ export default function Signup() {
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor="#94a3b8"
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -80,6 +88,7 @@ export default function Signup() {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#94a3b8"
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -103,35 +112,85 @@ export default function Signup() {
             Sign in
           </Link>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  inner: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '700', color: '#1d39c4' },
-  subtitle: { fontSize: 15, color: '#666', marginTop: 4, marginBottom: 28 },
+  // Adjusted container styles for the new gradient structure
+  container: { 
+    flex: 1, 
+  },
+  inner: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    padding: 24 
+  },
+  
+  // Typography using Sea Green accents
+  title: { 
+    fontSize: 28, 
+    fontWeight: '700', 
+    color: '#0d9488', 
+    textAlign: 'center' 
+  },
+  subtitle: { 
+    fontSize: 15, 
+    color: '#64748b', 
+    marginTop: 4, 
+    marginBottom: 32, 
+    textAlign: 'center' 
+  },
+  
+  // Inputs with soft sea green borders
   input: {
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#ccfbf1', 
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    marginBottom: 14,
+    marginBottom: 16,
+    backgroundColor: '#ffffff', // Ensures input fields stay clean white
+    color: '#0f172a',
   },
+  
+  // Primary Action Button styled in solid energetic Sea Green
   button: {
-    backgroundColor: '#1d39c4',
-    borderRadius: 10,
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 12,
+    // Add depth with a crisp shadow
+    shadowColor: '#0d9488',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
-  footerText: { color: '#666' },
-  link: { color: '#1d39c4', fontWeight: '600' },
+  buttonDisabled: { 
+    opacity: 0.6,
+    shadowOpacity: 0
+  },
+  buttonText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
+  
+  footer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    marginTop: 32 
+  },
+  footerText: { 
+    color: '#fff' // Set to white to contrast with the gradient bottom background
+  },
+  link: { 
+    color: '#ffffff', // Ensuring the link text is visible and white
+    fontWeight: '700', 
+    textDecorationLine: 'underline', // Add underline for emphasis
+  },
 });

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Login() {
   const router = useRouter();
@@ -34,22 +36,36 @@ export default function Login() {
       return;
     }
 
-    // Auth state listener will update the session; send the user into the app.
     router.replace('/(app)/profile');
   }
 
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={['#ffffff', '#0d9488']}
+      start={{ x: 0.2, y: 0.2 }}
+      end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
+      <KeyboardAvoidingView
+        style={styles.inner}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* --- CLUB LOGO SECTION --- */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../../assets/images/club_logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.subtitle}>Sign in to Falcon Triathlon Club</Text>
 
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor="#94a3b8"
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -58,6 +74,7 @@ export default function Login() {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#94a3b8"
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -69,7 +86,7 @@ export default function Login() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#ffffff" />
           ) : (
             <Text style={styles.buttonText}>Sign In</Text>
           )}
@@ -81,35 +98,86 @@ export default function Login() {
             Create one now
           </Link>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  inner: { flex: 1, justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '700', color: '#1d39c4' },
-  subtitle: { fontSize: 15, color: '#666', marginTop: 4, marginBottom: 28 },
+  container: { 
+    flex: 1, 
+  },
+  inner: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    padding: 24 
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    backgroundColor: '#ffffff', 
+    borderRadius: 60,
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: '700', 
+    color: '#0d9488',
+    textAlign: 'center' 
+  },
+  subtitle: { 
+    fontSize: 15, 
+    color: '#64748b', 
+    marginTop: 4, 
+    marginBottom: 28,
+    textAlign: 'center'
+  },
   input: {
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#ccfbf1', 
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    marginBottom: 14,
+    marginBottom: 16,
+    backgroundColor: '#ffffff',
+    color: '#0f172a',
   },
   button: {
-    backgroundColor: '#1d39c4',
-    borderRadius: 10,
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 10,
+    shadowColor: '#0d9488',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
-  footerText: { color: '#666' },
-  link: { color: '#1d39c4', fontWeight: '600' },
+  buttonDisabled: { 
+    opacity: 0.6,
+    shadowOpacity: 0
+  },
+  buttonText: { 
+    color: '#ffffff', 
+    fontSize: 16, 
+    fontWeight: '600' 
+  },
+  footer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    marginTop: 32 
+  },
+  footerText: { 
+    color: '#ffffff' 
+  },
+  link: { 
+    color: '#ffffff', 
+    fontWeight: '700',
+    textDecorationLine: 'underline'
+  },
 });

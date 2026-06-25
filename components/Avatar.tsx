@@ -1,28 +1,40 @@
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
-type AvatarProps = {
-  /** Used to derive initials shown inside the circle. */
-  name?: string | null;
-  size?: number;
-};
-
-function getInitials(name?: string | null) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  const first = parts[0]?.[0] ?? '';
-  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-  return (first + last).toUpperCase() || '?';
+interface AvatarProps {
+  url?: string | null;
+  name: string;
+  size: number;
 }
 
-export default function Avatar({ name, size = 120 }: AvatarProps) {
+export default function Avatar({ url, name, size }: AvatarProps) {
+  const getInitials = (fullName: string) => {
+    return fullName
+      .split(' ')
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || '?';
+  };
+
+  const containerStyle = {
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+  };
+
+  if (url) {
+    return (
+      <Image
+        source={{ uri: url }}
+        style={[styles.avatarImage, containerStyle]}
+      />
+    );
+  }
+
   return (
-    <View
-      style={[
-        styles.circle,
-        { width: size, height: size, borderRadius: size / 2 },
-      ]}
-    >
-      <Text style={[styles.initials, { fontSize: size * 0.36 }]}>
+    <View style={[styles.fallbackContainer, containerStyle]}>
+      <Text style={[styles.fallbackText, { fontSize: size * 0.35 }]}>
         {getInitials(name)}
       </Text>
     </View>
@@ -30,15 +42,19 @@ export default function Avatar({ name, size = 120 }: AvatarProps) {
 }
 
 const styles = StyleSheet.create({
-  circle: {
-    backgroundColor: '#d6e4ff',
+  avatarImage: {
+    backgroundColor: '#f1f5f9',
+    resizeMode: 'cover',
+  },
+  fallbackContainer: {
+    backgroundColor: '#ccfbf1', // Matching sea green tone
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#adc6ff',
+    borderColor: '#0d9488',
   },
-  initials: {
-    color: '#1d39c4',
+  fallbackText: {
+    color: '#0d9488',
     fontWeight: '700',
   },
 });
