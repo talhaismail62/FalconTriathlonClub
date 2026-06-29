@@ -39,6 +39,7 @@ export default function AppLayout() {
             style={{ flex: 1 }}
           />
         ),
+        headerBackground: () => require('@/components/GradientHeader').default
       }}
     >
       <Tabs.Screen
