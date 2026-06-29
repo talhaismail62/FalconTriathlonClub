@@ -14,7 +14,7 @@ export default function Index() {
   }
 
   // Logged-in users go to the app, everyone else to the login screen.
-  return session ? <Redirect href="/(app)/profile" /> : <Redirect href="/(auth)/login" />;
+  return session ? <Redirect href="/(app)" /> : <Redirect href="/(auth)/login" />;
 }
 
 const styles = StyleSheet.create({
