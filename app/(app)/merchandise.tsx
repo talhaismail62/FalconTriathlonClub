@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { File } from 'expo-file-system'; // <-- Added: Matches profile.tsx
+import { decode } from 'base64-arraybuffer'; // <-- Added: Matches profile.tsx
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { CardContainer, GradientButton } from '@/components/UI';
@@ -19,7 +21,6 @@ export default function MerchandiseScreen() {
   const [paymentScreenshot, setPaymentScreenshot] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Price increases by 500 based on size index
   const currentPrice = selectedSize ? 1000 + (500 * SIZES.indexOf(selectedSize)) : 0;
 
   async function pickImage() {
@@ -41,36 +42,38 @@ export default function MerchandiseScreen() {
 
     setIsSubmitting(true);
     try {
-      // 1. Upload to 'payment_proofs' bucket
+      // 1. UPLOAD: Use the exact same safe method as profile.tsx
       const fileExt = paymentScreenshot.split('.').pop() ?? 'jpg';
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       
-      const response = await fetch(paymentScreenshot);
-      const blob = await response.blob();
+      const fileInstance = new File(paymentScreenshot);
+      const base64 = await fileInstance.base64();
+      const arrayBuffer = decode(base64);
       
       const { error: uploadError } = await supabase.storage
         .from('payment_proofs')
-        .upload(fileName, blob, { upsert: true });
+        .upload(fileName, arrayBuffer, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // 2. Insert into 'merchandise_orders' table
+      // 2. DATABASE INSERT: Exact match to Flutter's payload structure
       const { error: dbError } = await supabase.from('merchandise_orders').insert({
         auth_uid: user.id,
         full_name: user.user_metadata?.name || 'Athlete',
+        phone_number: '', // Flutter hardcoded a JazzCash number here, left blank for RN
         item_name: selectedItem,
         size: selectedSize,
         price: currentPrice,
         payment_screenshot: fileName,
-        status: false, // Pending
+        status: false, 
       });
 
       if (dbError) throw dbError;
 
       Alert.alert("Success", "Merchandise order submitted!");
-      router.back();
+      router.back(); 
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      Alert.alert("Error", e.message || "Network request failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -83,8 +86,6 @@ export default function MerchandiseScreen() {
       end={{ x: 0.8, y: 0.8 }} 
       style={styles.container}
     >
-      {/* REMOVED THE MANUAL HEADER VIEW HERE */}
-      
       <ScrollView contentContainerStyle={styles.form} showsVerticalScrollIndicator={false}>
         {/* Item Selection */}
         <CardContainer>
@@ -145,7 +146,7 @@ export default function MerchandiseScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  form: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 20 }, 
+  form: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 20 },
   label: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 12 },
   toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   toggleChip: { 
