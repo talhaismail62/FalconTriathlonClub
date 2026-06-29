@@ -76,6 +76,43 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="merchandise"
+        options={{
+          href: null, // Hides it
+          headerShown: true,
+          title: "Merchandise Order",
+          headerTintColor: '#ffffff',
+          headerStyle: { elevation: 0, shadowColor: 'transparent' },
+          headerBackground: () => (
+            <LinearGradient
+              colors={['#0d9488', '#14b8a6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ flex: 1 }}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="registration"
+        options={{
+          href: null,
+          headerShown: true,
+          title: "Event Registration",
+          headerTintColor: '#ffffff',
+          headerStyle: { elevation: 0, shadowColor: 'transparent' },
+          headerBackground: () => (
+            <LinearGradient
+              colors={['#0d9488', '#14b8a6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ flex: 1 }}
+            />
+          ),
+        }}
+      />
     </Tabs>
+
   );
 }
