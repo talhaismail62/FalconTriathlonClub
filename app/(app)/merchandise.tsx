@@ -43,7 +43,7 @@ export default function MerchandiseScreen() {
     setIsSubmitting(true);
     try {
       // 1. UPLOAD: Use the exact same safe method as profile.tsx
-      const fileExt = paymentScreenshot.split('.').pop() ?? 'jpg';
+      const fileExt = 'jpg'
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       
       const fileInstance = new File(paymentScreenshot);
