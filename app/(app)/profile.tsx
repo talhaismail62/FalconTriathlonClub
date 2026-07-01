@@ -171,7 +171,7 @@ export default function Profile() {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              onLongPress={() => router.push('../(admin)')} // Long press your email to open admin!
+              onLongPress={() => router.push('/(admin)')} // Long press your email to open admin!
               activeOpacity={0.7}
             >
               <Text style={styles.emailBadge}>{email}</Text>
