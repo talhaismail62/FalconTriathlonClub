@@ -2,13 +2,18 @@ import { Redirect, Tabs } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons'; // Built into Expo, no install needed
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
+  const insets = useSafeAreaInsets();
 
   if (!loading && !session) {
     return <Redirect href="/(auth)/login" />;
   }
+
+  // Float the bar above the system nav (gesture/button bar) using the bottom inset.
+  const barBottom = Math.max(insets.bottom, 12) + 8;
 
   return (
     <Tabs
@@ -16,27 +21,42 @@ export default function AppLayout() {
         headerShown: false, // We'll add custom headers inside the screens later
         tabBarShowLabel: true,
         tabBarActiveTintColor: '#ffffff',
-        tabBarInactiveTintColor: '#94a3b8',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.75)',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+        },
+        tabBarItemStyle: {
+          paddingVertical: 10,
+        },
         tabBarStyle: {
           position: 'absolute',
-          bottom: 20,
-          left: 20,
-          right: 20,
-          height: 65,
-          borderRadius: 30,
+          bottom: barBottom,
+          left: 16,
+          right: 16,
+          height: 72,
+          paddingBottom: 0,
+          borderRadius: 28,
+          borderTopWidth: 0,
+          backgroundColor: 'transparent',
           elevation: 0,
           shadowColor: '#0d9488',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.2,
-          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.25,
+          shadowRadius: 12,
           overflow: 'hidden',
         },
         tabBarBackground: () => (
           <LinearGradient
-            colors={['#0d9488', '#14b8a6']} // Teal gradient for the bar
+            colors={['rgba(13,148,136,0.85)', 'rgba(20,184,166,0.85)']} // teal "liquid glass" — translucent but readable
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{ flex: 1 }}
+            style={{
+              flex: 1,
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.4)',
+              borderRadius: 28,
+            }}
           />
         ),
         headerBackground: () => require('@/components/GradientHeader').default
