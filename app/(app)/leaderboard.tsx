@@ -11,6 +11,7 @@ import {
   Pressable,
   FlatList,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -125,13 +126,14 @@ export default function LeaderboardTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d9488" />
-        }
-      >
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d9488" />
+          }
+        >
         <Text style={styles.heading}>Leaderboard</Text>
 
         {/* Monthly / Yearly scope toggle */}
@@ -207,7 +209,8 @@ export default function LeaderboardTab() {
             <LeaderRow key={entry.id ?? `${entry.username}-${i}`} rank={i + 1} entry={entry} />
           ))
         )}
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
       {/* Dropdown picker modal (shared for month & year) */}
       <Modal
@@ -301,6 +304,7 @@ function SportStat({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  safeArea: { flex: 1 }, 
   content: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 110 },
   heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
 
