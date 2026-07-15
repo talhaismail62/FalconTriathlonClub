@@ -5,7 +5,6 @@ import {
   StyleSheet, 
   FlatList, 
   ActivityIndicator, 
-  SafeAreaView,
   TouchableOpacity,
   Modal,
   TextInput,
@@ -14,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
@@ -125,7 +125,7 @@ export default function ActivitiesTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <View style={styles.headerRow}>
           <Text style={styles.heading}>Weekly Activities</Text>
           <TouchableOpacity 
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 8,
   },
   heading: {
