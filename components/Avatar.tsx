@@ -26,8 +26,9 @@ export default function Avatar({ url, name, size }: AvatarProps) {
   if (url) {
     return (
       <Image
-        source={{ uri: url }}
+        source={{ uri: url, cache: 'default' }} // Forces OS-level caching for instant loads
         style={[styles.avatarImage, containerStyle]}
+        fadeDuration={0}
       />
     );
   }
@@ -47,7 +48,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   fallbackContainer: {
-    backgroundColor: '#ccfbf1', // Matching sea green tone
+    backgroundColor: '#ccfbf1',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
