@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
@@ -15,6 +16,7 @@ interface Order {
 
 export default function VerifyPayments() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => { fetchPendingOrders(); }, []);
 
@@ -47,7 +49,7 @@ export default function VerifyPayments() {
       <FlatList
         data={orders}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 16, paddingTop: insets.top + 16, paddingBottom: 40 }}
         ListEmptyComponent={<Text style={styles.empty}>No pending payments!</Text>}
         renderItem={({ item }) => (
           <CardContainer>
@@ -73,7 +75,7 @@ export default function VerifyPayments() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, marginTop: 90},
+  container: { flex: 1 },
   empty: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16 },
   name: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
   details: { fontSize: 14, color: '#64748b', marginBottom: 2 },

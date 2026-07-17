@@ -23,12 +23,22 @@ export default function AdminDashboard() {
         </CardContainer>
 
         <CardContainer>
-          <TouchableOpacity 
-            style={styles.adminCard} 
+          <TouchableOpacity
+            style={styles.adminCard}
             onPress={() => router.push('/(admin)/verify-payments')}
           >
             <Text style={styles.cardTitle}>Verify Payments</Text>
             <Text style={styles.cardSubtext}>Approve or reject merchandise payment proofs.</Text>
+          </TouchableOpacity>
+        </CardContainer>
+
+        <CardContainer>
+          <TouchableOpacity
+            style={styles.adminCard}
+            onPress={() => router.push('/(admin)/manage-activities')}
+          >
+            <Text style={styles.cardTitle}>Manage Activities</Text>
+            <Text style={styles.cardSubtext}>Create, edit, or delete weekly activities.</Text>
           </TouchableOpacity>
         </CardContainer>
       </View>

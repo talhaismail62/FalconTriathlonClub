@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons'; // Built into Expo, no install needed
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import GradientHeader from '@/components/GradientHeader';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
@@ -59,7 +60,6 @@ export default function AppLayout() {
             }}
           />
         ),
-        headerBackground: () => require('@/components/GradientHeader').default
       }}
     >
       <Tabs.Screen
@@ -77,10 +77,10 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="map"
+        name="activities"
         options={{
-          title: 'Map',
-          tabBarIcon: ({ color, size }) => <Ionicons name="map" size={size} color={color} />,
+          title: 'Schedule',
+          tabBarIcon: ({ color, size }) => <Ionicons name="barbell" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -98,6 +98,12 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="map"
+        options={{
+          href: null, // Hidden until the club map feature is built out
+        }}
+      />
+      <Tabs.Screen
         name="merchandise"
         options={{
           href: null, // Hides it
@@ -105,14 +111,7 @@ export default function AppLayout() {
           title: "Merchandise Order",
           headerTintColor: '#ffffff',
           headerStyle: { elevation: 0, shadowColor: 'transparent' },
-          headerBackground: () => (
-            <LinearGradient
-              colors={['#0d9488', '#14b8a6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ flex: 1 }}
-            />
-          ),
+          headerBackground: () => <GradientHeader />,
         }}
       />
       <Tabs.Screen
@@ -123,14 +122,7 @@ export default function AppLayout() {
           title: "Event Registration",
           headerTintColor: '#ffffff',
           headerStyle: { elevation: 0, shadowColor: 'transparent' },
-          headerBackground: () => (
-            <LinearGradient
-              colors={['#0d9488', '#14b8a6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{ flex: 1 }}
-            />
-          ),
+          headerBackground: () => <GradientHeader />,
         }}
       />
     </Tabs>

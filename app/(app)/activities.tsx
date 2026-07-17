@@ -4,8 +4,7 @@ import {
   Text, 
   StyleSheet, 
   FlatList, 
-  ActivityIndicator, 
-  SafeAreaView,
+  ActivityIndicator,
   TouchableOpacity,
   Modal,
   TextInput,
@@ -14,8 +13,10 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import { CardContainer } from '@/components/UI';
 
 // Define the shape of our activity data
@@ -31,13 +32,15 @@ interface Activity {
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function ActivitiesTab() {
+  const { session } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [isAdmin, setIsAdmin] = useState(false);
+
   // Form Modal States
   const [modalVisible, setModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Input Field States
   const [selectedDay, setSelectedDay] = useState('Monday');
   const [title, setTitle] = useState('');
@@ -48,10 +51,32 @@ export default function ActivitiesTab() {
     fetchActivities();
   }, []);
 
+  // Only admins may edit the weekly schedule; everyone else views it read-only.
+  useEffect(() => {
+    let active = true;
+    async function checkAdmin() {
+      const email = session?.user?.email;
+      if (!email) {
+        if (active) setIsAdmin(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('myusers')
+        .select('is_admin')
+        .eq('email', email.toLowerCase())
+        .single();
+      if (active) setIsAdmin(!!data?.is_admin);
+    }
+    checkAdmin();
+    return () => {
+      active = false;
+    };
+  }, [session]);
+
   async function fetchActivities() {
     setLoading(true);
     const { data, error } = await supabase
-      .from('posts')
+      .from('weekly_activities')
       .select('*');
 
     if (!error && data) {
@@ -75,7 +100,7 @@ export default function ActivitiesTab() {
 
     try {
       const { error } = await supabase
-        .from('posts')
+        .from('weekly_activities')
         .insert([
           {
             day: selectedDay,
@@ -128,13 +153,15 @@ export default function ActivitiesTab() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.headerRow}>
           <Text style={styles.heading}>Weekly Activities</Text>
-          <TouchableOpacity 
-            style={styles.addButton} 
-            onPress={() => setModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.addButtonText}>+ Add</Text>
-          </TouchableOpacity>
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.addButtonText}>+ Add</Text>
+            </TouchableOpacity>
+          )}
         </View>
         
         {loading ? (

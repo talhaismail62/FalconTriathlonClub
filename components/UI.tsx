@@ -1,9 +1,24 @@
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export function GradientButton({ label, icon, onPress }: { label: string; icon?: string; onPress: () => void }) {
+export function GradientButton({
+  label,
+  icon,
+  onPress,
+  disabled = false,
+}: {
+  label: string;
+  icon?: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={styles.buttonContainer}>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      disabled={disabled}
+      style={[styles.buttonContainer, disabled && styles.buttonDisabled]}
+    >
       <LinearGradient
         colors={['#0d9488', '#14b8a6']}
         start={{ x: 0, y: 0 }}
@@ -35,6 +50,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 3,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   gradientButton: {
     paddingVertical: 14,

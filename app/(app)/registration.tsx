@@ -11,7 +11,9 @@ export default function RegistrationScreen() {
   const user = session?.user;
 
   // Pre-fill form with authenticated user's data for better UX
-  const [name, setName] = useState(user?.user_metadata?.name || '');
+  const [name, setName] = useState(
+    user?.user_metadata?.name || user?.user_metadata?.full_name || ''
+  );
   const [email, setEmail] = useState(user?.email || '');
   const [loading, setLoading] = useState(false);
 
@@ -73,9 +75,10 @@ export default function RegistrationScreen() {
           />
         </CardContainer>
 
-        <GradientButton 
-          label={loading ? "Registering..." : "Register Now"} 
-          onPress={handleRegister} 
+        <GradientButton
+          label={loading ? "Registering..." : "Register Now"}
+          onPress={handleRegister}
+          disabled={loading}
         />
       </ScrollView>
     </LinearGradient>

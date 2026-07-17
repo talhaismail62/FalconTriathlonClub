@@ -59,7 +59,7 @@ export default function MerchandiseScreen() {
       // 2. DATABASE INSERT: Exact match to Flutter's payload structure
       const { error: dbError } = await supabase.from('merchandise_orders').insert({
         auth_uid: user.id,
-        full_name: user.user_metadata?.name || 'Athlete',
+        full_name: user.user_metadata?.name || user.user_metadata?.full_name || 'Athlete',
         phone_number: '', // Flutter hardcoded a JazzCash number here, left blank for RN
         item_name: selectedItem,
         size: selectedSize,
@@ -134,9 +134,10 @@ export default function MerchandiseScreen() {
           </TouchableOpacity>
         </CardContainer>
 
-        <GradientButton 
-          label={isSubmitting ? "Submitting..." : "Submit Order"} 
-          onPress={handleSubmit} 
+        <GradientButton
+          label={isSubmitting ? "Submitting..." : "Submit Order"}
+          onPress={handleSubmit}
+          disabled={isSubmitting}
         />
         {isSubmitting && <ActivityIndicator color="#0d9488" style={{marginTop: 10}} />}
       </ScrollView>

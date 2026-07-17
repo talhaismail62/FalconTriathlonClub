@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, Image, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { File } from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { CardContainer, GradientButton } from '@/components/UI';
@@ -15,6 +18,7 @@ export default function ManagePosts() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => { fetchPosts(); }, []);
 
@@ -35,10 +39,16 @@ export default function ManagePosts() {
     let imageUrl = null;
 
     if (imageUri && session?.user) {
-      const blob = await (await fetch(imageUri)).blob();
-      const ext = imageUri.split('.').pop();
+      // React Native's fetch().blob() uploads a 0-byte file to Supabase storage,
+      // so read the file as base64 and decode to an ArrayBuffer instead
+      // (same approach as profile.tsx / merchandise.tsx).
+      const ext = (imageUri.split('.').pop()?.split('?')[0] || 'jpg').toLowerCase();
       const path = `posts/${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from('post_images').upload(path, blob); // Make sure 'post_images' bucket exists
+      const base64 = await new File(imageUri).base64();
+      const arrayBuffer = decode(base64);
+      const { error } = await supabase.storage
+        .from('post_images')
+        .upload(path, arrayBuffer, { contentType: `image/${ext}`, upsert: true }); // Make sure 'post_images' bucket exists
       if (!error) {
         const { data: publicUrlData } = supabase.storage.from('post_images').getPublicUrl(path);
         imageUrl = publicUrlData.publicUrl;
@@ -66,7 +76,7 @@ export default function ManagePosts() {
 
   return (
     <LinearGradient colors={['#ffffff', '#0d9488']} start={{ x: 0.2, y: 0.2 }} end={{ x: 0.8, y: 0.8 }} style={styles.container}>
-      <View style={styles.form}>
+      <View style={[styles.form, { paddingTop: insets.top + 16 }]}>
         <TextInput style={styles.input} placeholder="Post Title" value={title} onChangeText={setTitle} />
         <TextInput style={[styles.input, { height: 80 }]} placeholder="Description" multiline value={description} onChangeText={setDescription} />
         
@@ -76,7 +86,7 @@ export default function ManagePosts() {
           </Text>
         </TouchableOpacity>
 
-        <GradientButton label={loading ? "Saving..." : "Create Post"} onPress={handleCreate} />
+        <GradientButton label={loading ? "Saving..." : "Create Post"} onPress={handleCreate} disabled={loading} />
       </View>
 
       <FlatList
@@ -98,7 +108,7 @@ export default function ManagePosts() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, marginTop: 90 },
+  container: { flex: 1 },
   form: { padding: 16, gap: 12 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: '#0f172a' },
   imagePicker: { padding: 15, borderWidth: 2, borderColor: '#ccfbf1', borderStyle: 'dashed', borderRadius: 10, alignItems: 'center', backgroundColor: '#fff' },

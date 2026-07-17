@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Base URL of the FastAPI backend. Set EXPO_PUBLIC_LEADERBOARD_API_URL in .env
 // (local LAN IP for testing, Render URL once deployed). Falls back to localhost.
@@ -116,6 +117,7 @@ export default function LeaderboardTab() {
     setRefreshing(false);
   }
 
+  const insets = useSafeAreaInsets();
   const list = board[gender];
 
   return (
@@ -126,7 +128,7 @@ export default function LeaderboardTab() {
       style={styles.container}
     >
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d9488" />
@@ -265,7 +267,7 @@ function LeaderRow({ rank, entry }: { rank: number; entry: Entry }) {
           {entry.username || 'Unknown'}
         </Text>
         <View style={styles.scorePill}>
-          <Text style={styles.scoreValue}>{entry.score.toFixed(1)}</Text>
+          <Text style={styles.scoreValue}>{(entry.score ?? 0).toFixed(1)}</Text>
           <Text style={styles.scoreLabel}>pts</Text>
         </View>
       </View>

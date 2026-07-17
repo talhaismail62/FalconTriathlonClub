@@ -5,13 +5,13 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 // Industry Practice: Use the modern File interface from expo-file-system
 import { File } from 'expo-file-system';
@@ -26,7 +26,10 @@ export default function Profile() {
   const { session } = useAuth();
 
   // Component local states
-  const initialName = (session?.user?.user_metadata?.name as string) ?? 'Athlete';
+  const initialName =
+    (session?.user?.user_metadata?.name as string) ??
+    (session?.user?.user_metadata?.full_name as string) ??
+    'Athlete';
   const email = session?.user?.email ?? '';
 
   const [fullName, setFullName] = useState(initialName);
