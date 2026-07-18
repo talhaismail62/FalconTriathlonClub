@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons'; // Built into Expo, no install needed
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientHeader from '@/components/GradientHeader';
 
@@ -13,65 +13,69 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  // Float the bar above the system nav (gesture/button bar) using the bottom inset.
-  const barBottom = Math.max(insets.bottom, 12) + 8;
+  // Float above the system nav bar, but keep it compact (Defect #13).
+  const barBottom = Math.max(insets.bottom, 8) + 6;
 
   return (
     <Tabs
       screenOptions={{
-        headerShown: false, // We'll add custom headers inside the screens later
+        // ── Dynamic header (Defect #21) ──
+        // Replaces the fixed custom app bar in individual screens with Expo
+        // Router's managed header, which adapts to safe-area and scroll state.
+        headerShown: true,
+        headerShadowVisible: false,
+        headerTintColor: '#ffffff',
+        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
+        headerBackground: () => <GradientHeader />,
+        // Safe-area top spacing is handled by the header itself (Defect #14).
+
+        // ── Tab bar: darker, shorter, narrower (Defect #13) ──
         tabBarShowLabel: true,
         tabBarActiveTintColor: '#ffffff',
-        tabBarInactiveTintColor: 'rgba(255,255,255,0.75)',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.65)',
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '700',
+          marginTop: -4,
         },
         tabBarItemStyle: {
-          paddingVertical: 10,
+          paddingVertical: 6,
         },
         tabBarStyle: {
           position: 'absolute',
           bottom: barBottom,
-          left: 16,
-          right: 16,
-          height: 72,
+          left: 40,          // narrower — more horizontal margin
+          right: 40,
+          height: 60,        // shorter
           paddingBottom: 0,
-          borderRadius: 28,
+          paddingTop: 0,
+          borderRadius: 22,
           borderTopWidth: 0,
           backgroundColor: 'transparent',
-          elevation: 0,
-          shadowColor: '#0d9488',
+          elevation: 6,
+          shadowColor: '#0f172a',
           shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.25,
-          shadowRadius: 12,
-          overflow: 'hidden',
+          shadowOpacity: 0.35,
+          shadowRadius: 10,
+          overflow: 'hidden',  // prevents clipped-corner artefacts
         },
         tabBarBackground: () => (
           <LinearGradient
-            colors={['rgba(13,148,136,0.85)', 'rgba(20,184,166,0.85)']} // teal "liquid glass" — translucent but readable
+            colors={['#0f766e', '#0d9488']}   // darker teal
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={{
-              flex: 1,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.4)',
-              borderRadius: 28,
-            }}
+            style={{ flex: 1, borderRadius: 22 }}
           />
         ),
       }}
     >
-      {/* 1. Home Feed */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Falcon Triathlon',
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
         }}
       />
-
-      {/* 2. Activities (Weekly Activities) */}
       <Tabs.Screen
         name="activities"
         options={{
@@ -79,17 +83,6 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="bicycle" size={size} color={color} />,
         }}
       />
-
-      {/* 3. Chatbot */}
-      <Tabs.Screen
-        name="chatbot"
-        options={{
-          title: 'Coach AI',
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
-        }}
-      />
-
-      {/* 4. Leaderboard */}
       <Tabs.Screen
         name="leaderboard"
         options={{
@@ -97,41 +90,18 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="trophy" size={size} color={color} />,
         }}
       />
-
-      {/* 5. Profile */}
+      <Tabs.Screen
+        name="chatbot"
+        options={{
+          title: 'Sporty',
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="map"
-        options={{
-          href: null, // Hidden until the club map feature is built out
-        }}
-      />
-      <Tabs.Screen
-        name="merchandise"
-        options={{
-          href: null, // Hides it
-          headerShown: true,
-          title: "Merchandise Order",
-          headerTintColor: '#ffffff',
-          headerStyle: { elevation: 0, shadowColor: 'transparent' },
-          headerBackground: () => <GradientHeader />,
-        }}
-      />
-      <Tabs.Screen
-        name="registration"
-        options={{
-          href: null,
-          headerShown: true,
-          title: "Event Registration",
-          headerTintColor: '#ffffff',
-          headerStyle: { elevation: 0, shadowColor: 'transparent' },
-          headerBackground: () => <GradientHeader />,
         }}
       />
     </Tabs>

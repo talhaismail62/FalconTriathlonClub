@@ -4,9 +4,9 @@ import { useAuth } from '@/context/AuthContext';
 export default function AuthLayout() {
   const { session, loading } = useAuth();
 
-  // Don't let an already-authenticated user see login/signup.
+  // Authenticated users go straight to the app root (Home tab), not Profile.
   if (!loading && session) {
-    return <Redirect href="/(app)/profile" />;
+    return <Redirect href="/(app)" />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;
