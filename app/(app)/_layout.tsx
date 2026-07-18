@@ -20,15 +20,12 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         // ── Dynamic header (Defect #21) ──
-        // Replaces the fixed custom app bar in individual screens with Expo
-        // Router's managed header, which adapts to safe-area and scroll state.
         headerShown: true,
         headerShadowVisible: false,
         headerTintColor: '#ffffff',
         headerTitleStyle: { fontWeight: '700', fontSize: 18 },
         headerBackground: () => <GradientHeader />,
-        // Safe-area top spacing is handled by the header itself (Defect #14).
-
+        
         // ── Tab bar: darker, shorter, narrower (Defect #13) ──
         tabBarShowLabel: true,
         tabBarActiveTintColor: '#ffffff',
@@ -58,9 +55,9 @@ export default function AppLayout() {
           shadowRadius: 10,
           overflow: 'hidden',
         },
-        // REMOVE the tabBarBackground prop completely!
       }}
     >
+      {/* 1. Home Feed */}
       <Tabs.Screen
         name="index"
         options={{
@@ -68,13 +65,8 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="leaderboard"
-        options={{
-          title: 'Ranks',
-          tabBarIcon: ({ color, size }) => <Ionicons name="trophy" size={size} color={color} />,
-        }}
-      />
+
+      {/* 2. Chatbot */}
       <Tabs.Screen
         name="chatbot"
         options={{
@@ -82,6 +74,17 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
         }}
       />
+
+      {/* 3. Leaderboard */}
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: 'Ranks',
+          tabBarIcon: ({ color, size }) => <Ionicons name="trophy" size={size} color={color} />,
+        }}
+      />
+
+      {/* 4. Profile */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -90,10 +93,13 @@ export default function AppLayout() {
         }}
       />
 
-      {/* ── Deprecated features hidden from tabs (Defects #7, #18) ── */}
-      {/* The physical files have been deleted; these entries prevent Expo
+      {/* ── Deprecated/Removed features hidden from tabs (Defects #6, #7, #18) ── */}
+      {/* The physical files have been deleted or moved; these entries prevent Expo
           Router from auto-discovering any leftover routes. */}
       <Tabs.Screen name="activities" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="map" options={{ href: null }} />
+      <Tabs.Screen name="merchandise" options={{ href: null }} />
+      <Tabs.Screen name="registration" options={{ href: null }} />
     </Tabs>
   );
 }

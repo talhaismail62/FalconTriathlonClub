@@ -1,10 +1,15 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { CardContainer } from '@/components/UI';
-import { SafeAreaView } from 'react-native-safe-area-context'; // <-- Import this
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
   return (
     <LinearGradient 
       colors={['#ffffff', '#0d9488']} 
@@ -12,28 +17,57 @@ export default function AdminDashboard() {
       end={{ x: 0.8, y: 0.8 }} 
       style={styles.container}
     >
-      {/* Added SafeAreaView with edges={['top']} to push content below the header */}
+      {/* 
+        edges={['bottom']} ensures it doesn't double-pad the top, 
+        since the Stack header in _layout.tsx is now solid and handles the top safe area.
+      */}
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <View style={styles.content}>
-          <CardContainer>
-            <TouchableOpacity 
-              style={styles.adminCard} 
-              onPress={() => router.push('/(admin)/manage-posts')}
-            >
-              <Text style={styles.cardTitle}>Manage Posts</Text>
-              <Text style={styles.cardSubtext}>Create, edit, or delete home feed posts.</Text>
-            </TouchableOpacity>
-          </CardContainer>
+        
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Admin Portal</Text>
+          <Text style={styles.headerSubtitle}>System Controls & Management</Text>
+        </View>
 
-          <CardContainer>
-            <TouchableOpacity 
-              style={styles.adminCard} 
-              onPress={() => router.push('/(admin)/verify-payments')}
-            >
-              <Text style={styles.cardTitle}>Verify Payments</Text>
-              <Text style={styles.cardSubtext}>Approve or reject merchandise payment proofs.</Text>
-            </TouchableOpacity>
-          </CardContainer>
+        <View style={styles.content}>
+          {/* Button to Manage Posts */}
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => router.push('/(admin)/manage-posts')}
+            style={styles.touchableMargin}
+          >
+            <CardContainer>
+              <View style={styles.cardRow}>
+                <View style={styles.iconWrapper}>
+                  <Ionicons name="document-text-outline" size={24} color="#0d9488" />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>Manage Posts</Text>
+                  <Text style={styles.cardDesc}>Create, update, or delete club updates</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+              </View>
+            </CardContainer>
+          </TouchableOpacity>
+
+          {/* Button to Verify Payments */}
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => router.push('/(admin)/verify-payments')}
+            style={styles.touchableMargin}
+          >
+            <CardContainer>
+              <View style={styles.cardRow}>
+                <View style={styles.iconWrapper}>
+                  <Ionicons name="card-outline" size={24} color="#0d9488" />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>Verify Payments</Text>
+                  <Text style={styles.cardDesc}>Approve pending user transactions</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+              </View>
+            </CardContainer>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -41,15 +75,60 @@ export default function AdminDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: { flex: 1 }, // <-- Added
-  content: { 
-    flex: 1, 
-    justifyContent: 'center',
-    padding: 16 
+  container: { 
+    flex: 1 
   },
-  adminCard: { padding: 10 },
-  icon: { fontSize: 32, marginBottom: 10 },
-  cardTitle: { fontSize: 20, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
-  cardSubtext: { fontSize: 14, color: '#64748b' },
+  safeArea: { 
+    flex: 1 
+  },
+  header: { 
+    paddingHorizontal: 16, 
+    paddingBottom: 20,
+    paddingTop: 10, // Added a tiny bit of top padding since header is handled by layout
+  },
+  headerTitle: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    color: '#0f172a' 
+  },
+  headerSubtitle: { 
+    fontSize: 14, 
+    color: '#64748b', 
+    fontWeight: '500', 
+    marginTop: 2 
+  },
+  content: { 
+    paddingHorizontal: 16, 
+  },
+  touchableMargin: {
+    marginBottom: 12,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  iconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#f0fdfa',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardContent: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  cardDesc: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 3,
+    lineHeight: 16,
+  },
 });

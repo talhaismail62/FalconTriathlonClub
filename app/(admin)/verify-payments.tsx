@@ -1,7 +1,17 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Image, 
+  FlatList, 
+  TouchableOpacity, 
+  Alert,
+  RefreshControl
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
 
@@ -16,6 +26,8 @@ interface Order {
 
 export default function VerifyPayments() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => { fetchPendingOrders(); }, []);
 
@@ -26,7 +38,13 @@ export default function VerifyPayments() {
       .eq('status', false); // Only get pending orders
       
     setOrders(data || []);
+    setRefreshing(false);
   }
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPendingOrders();
+  };
 
   async function handleApprove(id: string) {
     Alert.alert("Approve", "Mark this payment as verified?", [
@@ -45,19 +63,45 @@ export default function VerifyPayments() {
 
   return (
     <LinearGradient colors={['#ffffff', '#0d9488']} start={{ x: 0.2, y: 0.2 }} end={{ x: 0.8, y: 0.8 }} style={styles.container}>
-      <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+      {/* edges={['bottom']} prevents double padding since header is solid in _layout.tsx */}
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        
+        {/* Consistent Bold Black Top Heading */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Verify Payments</Text>
+          <Text style={styles.headerSubtitle}>Confirm customer screenshot transfers</Text>
+        </View>
+
         <FlatList
           data={orders}
           keyExtractor={item => item.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-          ListEmptyComponent={<Text style={styles.empty}>No pending payments!</Text>}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0d9488']} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="checkmark-circle-outline" size={48} color="#94a3b8" />
+              <Text style={styles.emptyText}>All payments verified. Clear queue!</Text>
+            </View>
+          }
           renderItem={({ item }) => (
             <CardContainer>
               <Text style={styles.name}>{item.full_name}</Text>
-              <Text style={styles.details}>{item.item_name} - Size: {item.size}</Text>
-              <Text style={styles.details}>Rs. {item.price}</Text>
               
-              {/* Payment Screenshot */}
+              <View style={styles.detailsRow}>
+                <Ionicons name="shirt-outline" size={14} color="#64748b" />
+                <Text style={styles.details}>{item.item_name} — Size: {item.size}</Text>
+              </View>
+
+              <View style={styles.detailsRow}>
+                <Ionicons name="cash-outline" size={14} color="#0d9488" />
+                <Text style={[styles.details, styles.priceText]}>Rs. {item.price}</Text>
+              </View>
+              
+              {/* Payment Screenshot Proof */}
+              <Text style={styles.screenshotLabel}>Receipt Attachment:</Text>
               <Image 
                 source={{ uri: getPublicUrl(item.payment_screenshot) }} 
                 style={styles.screenshot} 
@@ -65,6 +109,7 @@ export default function VerifyPayments() {
               />
 
               <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprove(item.id)}>
+                <Ionicons name="checkmark-done" size={18} color="#ffffff" style={{ marginRight: 6 }} />
                 <Text style={styles.approveText}>Approve Payment</Text>
               </TouchableOpacity>
             </CardContainer>
@@ -76,11 +121,23 @@ export default function VerifyPayments() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 }, // Removed marginTop: 90
-  empty: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16 },
-  name: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
-  details: { fontSize: 14, color: '#64748b', marginBottom: 2 },
-  screenshot: { width: '100%', height: 200, backgroundColor: '#f1f5f9', borderRadius: 8, marginVertical: 12 },
-  approveBtn: { backgroundColor: '#0d9488', paddingVertical: 10, borderRadius: 10, alignItems: 'center', marginTop: 5 },
-  approveText: { color: '#fff', fontWeight: '700' }
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 10 }, // Small padding top since header is solid
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
+  headerSubtitle: { fontSize: 14, color: '#64748b', fontWeight: '500', marginTop: 2 },
+  
+  name: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 6 },
+  detailsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  details: { fontSize: 14, color: '#475569', fontWeight: '500' },
+  priceText: { color: '#0d9488', fontWeight: '700' },
+  
+  screenshotLabel: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginTop: 10 },
+  screenshot: { width: '100%', height: 260, backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', marginTop: 4, marginBottom: 12 },
+  
+  approveBtn: { flexDirection: 'row', backgroundColor: '#0d9488', paddingVertical: 12, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginTop: 4 },
+  approveText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  
+  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 80, gap: 8 },
+  emptyText: { textAlign: 'center', color: '#64748b', fontSize: 16, fontWeight: '600' }
 });
