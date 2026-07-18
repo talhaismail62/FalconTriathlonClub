@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase';
-import { CardContainer } from '@/components/UI';
-=======
 import { useState, useCallback } from 'react';
 import { 
   View, 
@@ -21,9 +13,7 @@ import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
->>>>>>> AAB
 
 interface Post {
   id: string;
@@ -61,7 +51,6 @@ export default function HomeTab() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     useCallback(() => {
@@ -95,13 +84,6 @@ export default function HomeTab() {
 
     return (
       <CardContainer>
-<<<<<<< HEAD
-        {item.image_url && (
-          <Image source={{ uri: item.image_url }} style={styles.postImage} resizeMode="cover" />
-        )}
-        <Text style={styles.postTitle}>{item.title}</Text>
-        <Text style={styles.postDescription}>{item.description}</Text>
-=======
         {imageUrl && (
           <Image 
             source={{ uri: imageUrl }} 
@@ -120,7 +102,6 @@ export default function HomeTab() {
 
           <Text style={styles.postDescription}>{item.description}</Text>
         </View>
->>>>>>> AAB
       </CardContainer>
     );
   }
@@ -132,16 +113,8 @@ export default function HomeTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-<<<<<<< HEAD
-      {/* SafeAreaView ensures content starts below the dynamic header (Defect #14) */}
+      {/* SafeAreaView edges={['bottom']} prevents double padding since dynamic header handles top */}
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-=======
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Falcon Triathlon</Text>
-        </View>
-
->>>>>>> AAB
         {loading ? (
           <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 50 }} />
         ) : (
@@ -150,12 +123,9 @@ export default function HomeTab() {
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderPost}
             contentContainerStyle={styles.feedList}
-<<<<<<< HEAD
-=======
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0d9488']} />
             }
->>>>>>> AAB
             ListEmptyComponent={<Text style={styles.emptyText}>No club updates yet.</Text>}
           />
         )}
@@ -167,24 +137,16 @@ export default function HomeTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-<<<<<<< HEAD
   feedList: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 100,
+    paddingTop: 10, // Small padding since header is handled by _layout.tsx
+    paddingBottom: 110,
   },
-  postImage: { width: '100%', height: 200, borderRadius: 12, marginBottom: 12 },
-  postTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 6 },
-=======
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
-  feedList: { paddingHorizontal: 16, paddingBottom: 110 },
   postImage: { width: '100%', height: 200, borderRadius: 12, marginBottom: 12 },
   postTextContainer: { paddingHorizontal: 4 },
   postTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 8 },
   timeText: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
->>>>>>> AAB
   postDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
   emptyText: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16 },
 });
