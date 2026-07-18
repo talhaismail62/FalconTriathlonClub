@@ -44,35 +44,27 @@ export default function AppLayout() {
         tabBarStyle: {
           position: 'absolute',
           bottom: barBottom,
-          left: 40,          // narrower — more horizontal margin
-          right: 40,
-          height: 60,        // shorter
+          marginHorizontal: 20, // Forces the bar to be narrower with space on left/right
+          height: 60,
           paddingBottom: 0,
           paddingTop: 0,
-          borderRadius: 22,
+          borderRadius: 25,
           borderTopWidth: 0,
-          backgroundColor: 'transparent',
-          elevation: 6,
-          shadowColor: '#0f172a',
+          backgroundColor: '#0f766e', // Solid dark teal so it pops against the screen gradient
+          elevation: 10,
+          shadowColor: '#000000',
           shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.35,
+          shadowOpacity: 0.4,
           shadowRadius: 10,
-          overflow: 'hidden',  // prevents clipped-corner artefacts
+          overflow: 'hidden',
         },
-        tabBarBackground: () => (
-          <LinearGradient
-            colors={['#0f766e', '#0d9488']}   // darker teal
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{ flex: 1, borderRadius: 22 }}
-          />
-        ),
+        // REMOVE the tabBarBackground prop completely!
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Falcon Triathlon',
+          title: 'Home',
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
         }}
       />

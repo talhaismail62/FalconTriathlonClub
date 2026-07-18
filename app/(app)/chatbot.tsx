@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,28 +6,20 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ---------------------------------------------------------------------------
-// Gemini API config (free tier, no credit card — via Google's OpenAI-
-// compatible endpoint, so the request/response shape below stays the same
-// as any OpenAI-style chat API)
+// Gemini API config
 // ---------------------------------------------------------------------------
-// EXPO_PUBLIC_ vars get bundled into the app at build time, same pattern used
-// for EXPO_PUBLIC_LEADERBOARD_API_URL in leaderboard.tsx. Fine for testing,
-// but it means the key ships inside the app bundle. I'll explain a safer
-// backend-proxy option once you're ready to wire the real key in.
 const GROK_API_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 const GROK_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
-const GROK_MODEL = 'gemini-2.5-flash'; // fast + free-tier friendly; swap for another Gemini model if you like
+const GROK_MODEL = 'gemini-2.5-flash';
 
-// Keeps the bot strictly on-topic. Sent as the `system` message on every call.
 const SYSTEM_PROMPT = `You are Sporty AI, a friendly assistant inside a fitness app.
 Only answer questions about fitness, sport, training, exercise, nutrition for
 athletic performance, recovery, and related wellness topics. If the user asks
@@ -49,11 +41,26 @@ export default function ChatbotTab() {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0); // Tracks exact keyboard height
   const scrollRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
-  // Tab bar floats absolutely (see (app)/_layout.tsx: bottom + height), so the
-  // input bar needs matching bottom space or it sits hidden underneath it.
+  
+  // Space needed to clear the floating tab bar when keyboard is closed
   const tabBarClearance = Math.max(insets.bottom, 12) + 8 + 72;
+
+  // Manually listen to keyboard events to get exact pixel height
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   function scrollToEnd() {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -67,7 +74,7 @@ export default function ChatbotTab() {
     const nextMessages = [...messages, userMessage];
 
     setMessages(nextMessages);
-    setInput('');
+    setInput(''); // Clears the text input immediately
     setLoading(true);
     scrollToEnd();
 
@@ -120,12 +127,9 @@ export default function ChatbotTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
+      {/* We use edges={['top']} so the bottom padding doesn't conflict with our manual keyboardHeight */}
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.flex}>
           <Text style={styles.heading}>Sporty AI</Text>
 
           <ScrollView
@@ -140,26 +144,31 @@ export default function ChatbotTab() {
             ))}
             {loading && <TypingBubble />}
           </ScrollView>
+        </View>
 
-          <View style={[styles.inputBar, { marginBottom: tabBarClearance }]}>
-            <TextInput
-              style={styles.input}
-              value={input}
-              onChangeText={setInput}
-              placeholder="Ask about training, nutrition, recovery..."
-              placeholderTextColor="#94a3b8"
-              multiline
-              onSubmitEditing={handleSend}
-            />
-            <TouchableOpacity
-              style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
-              onPress={handleSend}
-              disabled={!input.trim() || loading}
-            >
-              <Ionicons name="arrow-up" size={20} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+        {/* 
+          If keyboard is open, push the bar up by the exact keyboard height.
+          If closed, push it up by the tab bar clearance.
+        */}
+        <View style={[styles.inputBar, { marginBottom: keyboardHeight > 0 ? keyboardHeight + 20: tabBarClearance }]}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask about training, nutrition, recovery..."
+            placeholderTextColor="#94a3b8"
+            returnKeyType="send"
+            blurOnSubmit={false} // Prevents keyboard from closing on Enter
+            onSubmitEditing={handleSend} // Makes Enter key send & clear text
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
+            onPress={handleSend}
+            disabled={!input.trim() || loading}
+          >
+            <Ionicons name="arrow-up" size={20} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -244,7 +253,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   input: {
     flex: 1,

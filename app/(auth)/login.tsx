@@ -78,10 +78,31 @@ export default function Login() {
       });
 
       if (error) throw error;
+
       if (data?.url) {
+        // 1. Open the browser session
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        
+        // 2. If successful, extract the tokens from the redirect URL
         if (result.type === 'success') {
-          // Supabase will fire SIGNED_IN via onAuthStateChange.
+          // The tokens are stored in the hash fragment (e.g., #access_token=...&refresh_token=...)
+          const urlParams = result.url.split('#')[1] || '';
+          const searchParams = new URLSearchParams(urlParams);
+          
+          const access_token = searchParams.get('access_token');
+          const refresh_token = searchParams.get('refresh_token');
+
+          // 3. Manually pass the tokens to Supabase
+          if (access_token && refresh_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+            
+            if (sessionError) throw sessionError;
+            
+            // AuthContext's onAuthStateChange will catch this and redirect automatically!
+          }
         }
       }
     } catch (e: any) {
@@ -100,11 +121,17 @@ export default function Login() {
     >
       {/* ScrollView inside KAV fixes the "screen stops moving up" issue (Defect #12) */}
       <KeyboardAvoidingView
-        style={styles.inner}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            padding: 24,
+            paddingTop: 60, // Pushes content down from the top
+            paddingBottom: 40,
+          }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

@@ -3,11 +3,10 @@ import { useAuth } from '@/context/AuthContext';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import GradientHeader from '@/components/GradientHeader';
 
 export default function AdminLayout() {
   const { session, loading: authLoading } = useAuth();
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null); // null = checking, false = no, true = yes
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     checkAdminStatus();
@@ -18,8 +17,6 @@ export default function AdminLayout() {
       setIsAdmin(false);
       return;
     }
-
-    // Ask the database directly, not the JWT token
     const { data, error } = await supabase
       .from('myusers')
       .select('is_admin')
@@ -33,7 +30,6 @@ export default function AdminLayout() {
     }
   }
 
-  // 1. Still loading auth or checking database
   if (authLoading || isAdmin === null) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
@@ -42,24 +38,18 @@ export default function AdminLayout() {
     );
   }
 
-  // 2. Not logged in at all
-  if (!session) {
-    return <Redirect href="/(auth)/login" />;
-  }
+  if (!session) return <Redirect href="/(auth)/login" />;
+  if (!isAdmin) return <Redirect href="/(app)" />;
 
-  // 3. Logged in, but database says NOT an admin
-  if (!isAdmin) {
-    return <Redirect href="/(app)" />; 
-  }
-
-  // 4. Logged in AND is admin
   return (
     <Stack 
       screenOptions={{
         headerShown: true,
+        headerTransparent: false, // Prevents background bleed
         headerShadowVisible: false,
         headerTintColor: '#ffffff',
-        headerBackground: () => <GradientHeader />,
+        headerStyle: { backgroundColor: '#0d9488' }, // Solid header color
+        headerTitleStyle: { color: '#ffffff', fontWeight: '700' },
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Admin Panel' }} />

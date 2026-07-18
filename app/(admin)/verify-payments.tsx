@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
 
@@ -44,36 +45,38 @@ export default function VerifyPayments() {
 
   return (
     <LinearGradient colors={['#ffffff', '#0d9488']} start={{ x: 0.2, y: 0.2 }} end={{ x: 0.8, y: 0.8 }} style={styles.container}>
-      <FlatList
-        data={orders}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-        ListEmptyComponent={<Text style={styles.empty}>No pending payments!</Text>}
-        renderItem={({ item }) => (
-          <CardContainer>
-            <Text style={styles.name}>{item.full_name}</Text>
-            <Text style={styles.details}>{item.item_name} - Size: {item.size}</Text>
-            <Text style={styles.details}>Rs. {item.price}</Text>
-            
-            {/* Payment Screenshot */}
-            <Image 
-              source={{ uri: getPublicUrl(item.payment_screenshot) }} 
-              style={styles.screenshot} 
-              resizeMode="contain"
-            />
+      <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+        <FlatList
+          data={orders}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+          ListEmptyComponent={<Text style={styles.empty}>No pending payments!</Text>}
+          renderItem={({ item }) => (
+            <CardContainer>
+              <Text style={styles.name}>{item.full_name}</Text>
+              <Text style={styles.details}>{item.item_name} - Size: {item.size}</Text>
+              <Text style={styles.details}>Rs. {item.price}</Text>
+              
+              {/* Payment Screenshot */}
+              <Image 
+                source={{ uri: getPublicUrl(item.payment_screenshot) }} 
+                style={styles.screenshot} 
+                resizeMode="contain"
+              />
 
-            <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprove(item.id)}>
-              <Text style={styles.approveText}>Approve Payment</Text>
-            </TouchableOpacity>
-          </CardContainer>
-        )}
-      />
+              <TouchableOpacity style={styles.approveBtn} onPress={() => handleApprove(item.id)}>
+                <Text style={styles.approveText}>Approve Payment</Text>
+              </TouchableOpacity>
+            </CardContainer>
+          )}
+        />
+      </SafeAreaView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, marginTop: 90},
+  container: { flex: 1 }, // Removed marginTop: 90
   empty: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16 },
   name: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
   details: { fontSize: 14, color: '#64748b', marginBottom: 2 },

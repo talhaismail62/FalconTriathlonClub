@@ -51,15 +51,30 @@ export default function Signup() {
 
     // Store auth_uid in the myusers table (Defect #3)
     if (data.user) {
-      const { error: profileError } = await supabase.from('myusers').insert({
-        auth_uid: data.user.id,
-        email: email.trim().toLowerCase(),
-        name: name.trim(),
-      });
+      const emailLower = email.trim().toLowerCase();
+      
+      // 1. Check if a row already exists (e.g., created by a database trigger)
+      const { data: existingUser } = await supabase
+        .from('myusers')
+        .select('id')
+        .eq('email', emailLower)
+        .maybeSingle();
 
-      if (profileError) {
-        // Don't block signup, but warn — the column may not exist yet (Defect #3 backend portion).
-        console.warn('[signup] myusers insert failed:', profileError.message);
+      if (existingUser) {
+        // 2. If it exists, update it with the auth_uid
+        const { error: updateError } = await supabase
+          .from('myusers')
+          .update({ auth_uid: data.user.id, name: name.trim() })
+          .eq('email', emailLower);
+          
+        if (updateError) console.warn('[signup] myusers update failed:', updateError.message);
+      } else {
+        // 3. If it doesn't exist, insert it
+        const { error: insertError } = await supabase
+          .from('myusers')
+          .insert({ auth_uid: data.user.id, email: emailLower, name: name.trim() });
+          
+        if (insertError) console.warn('[signup] myusers insert failed:', insertError.message);
       }
     }
 
@@ -88,8 +103,32 @@ export default function Signup() {
       });
 
       if (error) throw error;
+
       if (data?.url) {
-        await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        // 1. Open the browser session
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        
+        // 2. If successful, extract the tokens from the redirect URL
+        if (result.type === 'success') {
+          // The tokens are stored in the hash fragment (e.g., #access_token=...&refresh_token=...)
+          const urlParams = result.url.split('#')[1] || '';
+          const searchParams = new URLSearchParams(urlParams);
+          
+          const access_token = searchParams.get('access_token');
+          const refresh_token = searchParams.get('refresh_token');
+
+          // 3. Manually pass the tokens to Supabase
+          if (access_token && refresh_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+            
+            if (sessionError) throw sessionError;
+            
+            // AuthContext's onAuthStateChange will catch this and redirect automatically!
+          }
+        }
       }
     } catch (e: any) {
       Alert.alert('Google sign-in failed', e?.message ?? 'Unknown error');
@@ -107,7 +146,8 @@ export default function Signup() {
     >
       <KeyboardAvoidingView
         style={styles.inner}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
