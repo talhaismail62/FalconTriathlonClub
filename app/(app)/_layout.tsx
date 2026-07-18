@@ -62,13 +62,34 @@ export default function AppLayout() {
         ),
       }}
     >
+      {/* 1. Home Feed */}
       <Tabs.Screen
-        name="index" // This maps to app/(app)/index.tsx
+        name="index"
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
         }}
       />
+
+      {/* 2. Activities (Weekly Activities) */}
+      <Tabs.Screen
+        name="activities"
+        options={{
+          title: 'Activities',
+          tabBarIcon: ({ color, size }) => <Ionicons name="bicycle" size={size} color={color} />,
+        }}
+      />
+
+      {/* 3. Chatbot */}
+      <Tabs.Screen
+        name="chatbot"
+        options={{
+          title: 'Coach AI',
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
+        }}
+      />
+
+      {/* 4. Leaderboard */}
       <Tabs.Screen
         name="leaderboard"
         options={{
@@ -76,20 +97,8 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="trophy" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="activities"
-        options={{
-          title: 'Schedule',
-          tabBarIcon: ({ color, size }) => <Ionicons name="barbell" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="chatbot"
-        options={{
-          title: 'Sporty',
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
-        }}
-      />
+
+      {/* 5. Profile */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -126,6 +135,5 @@ export default function AppLayout() {
         }}
       />
     </Tabs>
-
   );
 }

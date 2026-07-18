@@ -10,9 +10,11 @@ import {
   Modal,
   Pressable,
   FlatList,
+  SafeAreaView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Base URL of the FastAPI backend. Set EXPO_PUBLIC_LEADERBOARD_API_URL in .env
@@ -64,6 +66,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i); // e.g. 2026 … 2021
 
 export default function LeaderboardTab() {
+  const insets = useSafeAreaInsets();
   const now = new Date();
 
   const [scope, setScope] = useState<Scope>('monthly');
@@ -79,6 +82,10 @@ export default function LeaderboardTab() {
   // Which dropdown is open, if any.
   const [picker, setPicker] = useState<null | 'month' | 'year'>(null);
 
+  const getCacheKey = useCallback(() => {
+    return `@leaderboard_cache_${scope}_${month}_${year}`;
+  }, [scope, month, year]);
+
   const fetchBoard = useCallback(async () => {
     setError(null);
     const url =
@@ -89,7 +96,9 @@ export default function LeaderboardTab() {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const json = await res.json();
-      setBoard(normalise(json));
+      const normalised = normalise(json);
+      setBoard(normalised);
+      await AsyncStorage.setItem(getCacheKey(), JSON.stringify(normalised));
     } catch (e: any) {
       setBoard(EMPTY_BOARD);
       setError(
@@ -98,10 +107,20 @@ export default function LeaderboardTab() {
           : e?.message ?? 'Failed to load leaderboard.'
       );
     }
-  }, [scope, month, year]);
+  }, [scope, month, year, getCacheKey]);
 
   useEffect(() => {
     let active = true;
+
+    // Load from cache first for instant rendering
+    AsyncStorage.getItem(getCacheKey()).then((cached) => {
+      if (cached && active) {
+        try {
+          setBoard(JSON.parse(cached));
+        } catch {}
+      }
+    });
+
     setLoading(true);
     fetchBoard().finally(() => {
       if (active) setLoading(false);
@@ -109,7 +128,7 @@ export default function LeaderboardTab() {
     return () => {
       active = false;
     };
-  }, [fetchBoard]);
+  }, [fetchBoard, getCacheKey]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -117,7 +136,6 @@ export default function LeaderboardTab() {
     setRefreshing(false);
   }
 
-  const insets = useSafeAreaInsets();
   const list = board[gender];
 
   return (
@@ -127,89 +145,91 @@ export default function LeaderboardTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d9488" />
-        }
-      >
-        <Text style={styles.heading}>Leaderboard</Text>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d9488" />
+          }
+        >
+          <Text style={styles.heading}>Leaderboard</Text>
 
-        {/* Monthly / Yearly scope toggle */}
-        <View style={styles.segment}>
-          {(['monthly', 'yearly'] as Scope[]).map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.segmentBtn, scope === s && styles.segmentBtnActive]}
-              onPress={() => setScope(s)}
-            >
-              <Text style={[styles.segmentText, scope === s && styles.segmentTextActive]}>
-                {s === 'monthly' ? 'Monthly' : 'Yearly'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {/* Monthly / Yearly scope toggle */}
+          <View style={styles.segment}>
+            {(['monthly', 'yearly'] as Scope[]).map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.segmentBtn, scope === s && styles.segmentBtnActive]}
+                onPress={() => setScope(s)}
+              >
+                <Text style={[styles.segmentText, scope === s && styles.segmentTextActive]}>
+                  {s === 'monthly' ? 'Monthly' : 'Yearly'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        {/* Period selector — dropdowns */}
-        <View style={styles.periodRow}>
-          {scope === 'monthly' && (
-            <TouchableOpacity style={styles.dropdown} onPress={() => setPicker('month')}>
-              <Text style={styles.dropdownLabel}>Month</Text>
+          {/* Period selector — dropdowns */}
+          <View style={styles.periodRow}>
+            {scope === 'monthly' && (
+              <TouchableOpacity style={styles.dropdown} onPress={() => setPicker('month')}>
+                <Text style={styles.dropdownLabel}>Month</Text>
+                <View style={styles.dropdownValueRow}>
+                  <Text style={styles.dropdownValue}>{MONTHS[month - 1]}</Text>
+                  <Ionicons name="chevron-down" size={18} color="#0d9488" />
+                </View>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.dropdown} onPress={() => setPicker('year')}>
+              <Text style={styles.dropdownLabel}>Year</Text>
               <View style={styles.dropdownValueRow}>
-                <Text style={styles.dropdownValue}>{MONTHS[month - 1]}</Text>
+                <Text style={styles.dropdownValue}>{year}</Text>
                 <Ionicons name="chevron-down" size={18} color="#0d9488" />
               </View>
             </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.dropdown} onPress={() => setPicker('year')}>
-            <Text style={styles.dropdownLabel}>Year</Text>
-            <View style={styles.dropdownValueRow}>
-              <Text style={styles.dropdownValue}>{year}</Text>
-              <Ionicons name="chevron-down" size={18} color="#0d9488" />
+          </View>
+
+          {/* Male / Female toggle */}
+          <View style={styles.segment}>
+            {(['male', 'female'] as Gender[]).map((g) => (
+              <TouchableOpacity
+                key={g}
+                style={[styles.segmentBtn, gender === g && styles.segmentBtnActive]}
+                onPress={() => setGender(g)}
+              >
+                <Text style={[styles.segmentText, gender === g && styles.segmentTextActive]}>
+                  {g === 'male' ? 'Men' : 'Women'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Body */}
+          {loading && list.length === 0 ? (
+            <ActivityIndicator color="#0d9488" size="large" style={{ marginTop: 40 }} />
+          ) : error ? (
+            <View style={styles.messageCard}>
+              <Ionicons name="cloud-offline-outline" size={28} color="#ef4444" />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={onRefresh} style={styles.retryBtn}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Male / Female toggle */}
-        <View style={styles.segment}>
-          {(['male', 'female'] as Gender[]).map((g) => (
-            <TouchableOpacity
-              key={g}
-              style={[styles.segmentBtn, gender === g && styles.segmentBtnActive]}
-              onPress={() => setGender(g)}
-            >
-              <Text style={[styles.segmentText, gender === g && styles.segmentTextActive]}>
-                {g === 'male' ? 'Men' : 'Women'}
+          ) : list.length === 0 ? (
+            <View style={styles.messageCard}>
+              <Ionicons name="trophy-outline" size={28} color="#94a3b8" />
+              <Text style={styles.emptyText}>
+                No scores for this {scope === 'monthly' ? 'month' : 'year'} yet.
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Body */}
-        {loading ? (
-          <ActivityIndicator color="#0d9488" size="large" style={{ marginTop: 40 }} />
-        ) : error ? (
-          <View style={styles.messageCard}>
-            <Ionicons name="cloud-offline-outline" size={28} color="#ef4444" />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={onRefresh} style={styles.retryBtn}>
-              <Text style={styles.retryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : list.length === 0 ? (
-          <View style={styles.messageCard}>
-            <Ionicons name="trophy-outline" size={28} color="#94a3b8" />
-            <Text style={styles.emptyText}>
-              No scores for this {scope === 'monthly' ? 'month' : 'year'} yet.
-            </Text>
-          </View>
-        ) : (
-          list.map((entry, i) => (
-            <LeaderRow key={entry.id ?? `${entry.username}-${i}`} rank={i + 1} entry={entry} />
-          ))
-        )}
-      </ScrollView>
+            </View>
+          ) : (
+            list.map((entry, i) => (
+              <LeaderRow key={entry.id ?? `${entry.username}-${i}`} rank={i + 1} entry={entry} />
+            ))
+          )}
+        </ScrollView>
+      </SafeAreaView>
 
       {/* Dropdown picker modal (shared for month & year) */}
       <Modal
@@ -303,7 +323,8 @@ function SportStat({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 110 },
+  safeArea: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingBottom: 110 },
   heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
 
   segment: {
