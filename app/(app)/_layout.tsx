@@ -97,9 +97,6 @@ export default function AppLayout() {
       {/* The physical files have been deleted or moved; these entries prevent Expo
           Router from auto-discovering any leftover routes. */}
       <Tabs.Screen name="activities" options={{ href: null, headerShown: false }} />
-      <Tabs.Screen name="map" options={{ href: null }} />
-      <Tabs.Screen name="merchandise" options={{ href: null }} />
-      <Tabs.Screen name="registration" options={{ href: null }} />
     </Tabs>
   );
 }
