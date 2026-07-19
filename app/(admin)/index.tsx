@@ -64,25 +64,6 @@ export default function AdminDashboard() {
             </CardContainer>
           </TouchableOpacity>
 
-          {/* Button to Verify Payments */}
-          <TouchableOpacity 
-            activeOpacity={0.8}
-            onPress={() => router.push('/(admin)/verify-payments')}
-            style={styles.touchableMargin}
-          >
-            <CardContainer>
-              <View style={styles.cardRow}>
-                <View style={styles.iconWrapper}>
-                  <Ionicons name="card-outline" size={24} color="#0d9488" />
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>Verify Payments</Text>
-                  <Text style={styles.cardDesc}>Approve pending user transactions</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
-              </View>
-            </CardContainer>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </LinearGradient>
