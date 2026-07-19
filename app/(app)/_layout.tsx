@@ -5,8 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientHeader from '@/components/GradientHeader';
 
 export default function AppLayout() {
-  const { session, loading } = useAuth();
+  const { session, loading, isRecovering } = useAuth();
   const insets = useSafeAreaInsets();
+
+  // Don't let a password-recovery session open the app.
+  if (isRecovering) {
+    return <Redirect href="/reset-password" />;
+  }
 
   if (!loading && !session) {
     return <Redirect href="/(auth)/login" />;
@@ -65,7 +70,16 @@ export default function AppLayout() {
         }}
       />
 
-      {/* 2. Chatbot */}
+      {/* 2. Activities (Weekly Activities) */}
+      <Tabs.Screen
+        name="activities"
+        options={{
+          title: 'Activities',
+          tabBarIcon: ({ color, size }) => <Ionicons name="bicycle" size={size} color={color} />,
+        }}
+      />
+
+      {/* 3. Chatbot */}
       <Tabs.Screen
         name="chatbot"
         options={{
@@ -74,7 +88,7 @@ export default function AppLayout() {
         }}
       />
 
-      {/* 3. Leaderboard */}
+      {/* 4. Leaderboard */}
       <Tabs.Screen
         name="leaderboard"
         options={{
@@ -83,7 +97,7 @@ export default function AppLayout() {
         }}
       />
 
-      {/* 4. Profile */}
+      {/* 5. Profile */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -92,11 +106,7 @@ export default function AppLayout() {
         }}
       />
 
-      {/* ── Deprecated/Removed features hidden from tabs (Defects #6, #7, #18) ── */}
-      {/* Activities file still exists, so we just hide it from the tab bar */}
-      <Tabs.Screen name="activities" options={{ href: null, headerShown: false }} />
-      
-      {/* DO NOT add map, merchandise, or registration here. 
+      {/* DO NOT add map, merchandise, or registration here.
           Their files were deleted, so Expo Router won't look for them. */}
     </Tabs>
   );
