@@ -23,6 +23,20 @@ import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
+const GENDER_OPTIONS = ['Male', 'Female'];
+
+// Athletes may compete in more than one discipline, so this is a multi-select.
+// Stored in the existing `sport_discipline` text column as a comma-separated list.
+const SPORT_OPTIONS = ['Cycling', 'Running', 'Swimming'];
+
+// Turn the stored "Cycling, Running" string into an array for the chip UI.
+function parseDisciplines(value: string): string[] {
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export default function Profile() {
   const router = useRouter();
   const { session } = useAuth();
@@ -46,6 +60,17 @@ export default function Profile() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const selectedDisciplines = parseDisciplines(sportDiscipline);
+
+  // Add or remove a discipline, keeping SPORT_OPTIONS order so the saved
+  // string stays stable regardless of the order the user tapped them.
+  function toggleDiscipline(option: string) {
+    const next = selectedDisciplines.includes(option)
+      ? selectedDisciplines.filter((d) => d !== option)
+      : [...selectedDisciplines, option];
+    setSportDiscipline(SPORT_OPTIONS.filter((o) => next.includes(o)).join(', '));
+  }
+
   useEffect(() => {
     loadProfile();
   }, [email]);
@@ -65,7 +90,9 @@ export default function Profile() {
       setSportDiscipline(data.sport_discipline || '');
       setBio(data.bio || '');
       setPhoneNumber(data.phone_number || '');
-      setEmergencyContact(data.emergency_contact || '');
+      // Legacy rows stored free text here ("Jane 0300..."), so keep only the
+      // digits now that this field is numeric.
+      setEmergencyContact((data.emergency_contact || '').replace(/[^0-9]/g, ''));
       setStravaHandle(data.strava_handle || '');
       setIsAdmin(data.is_admin || false);
 
@@ -265,12 +292,48 @@ export default function Profile() {
                     </View>
                     <View style={styles.flex1}>
                       <Text style={styles.label}>Gender</Text>
-                      <TextInput style={styles.input} value={gender} onChangeText={setGender} placeholder="Male/Female/Other" placeholderTextColor="#94a3b8" />
+                      <View style={styles.optionRow}>
+                        {GENDER_OPTIONS.map((option) => {
+                          const selected = gender === option;
+                          return (
+                            <TouchableOpacity
+                              key={option}
+                              style={[styles.optionChip, selected && styles.optionChipActive]}
+                              onPress={() => setGender(option)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[styles.optionChipText, selected && styles.optionChipTextActive]}>
+                                {option}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
                     </View>
                   </View>
 
                   <Text style={styles.label}>Sport Discipline</Text>
-                  <TextInput style={styles.input} value={sportDiscipline} onChangeText={setSportDiscipline} placeholder="e.g., Triathlon, Cycling" placeholderTextColor="#94a3b8" />
+                  <Text style={styles.helperText}>Select all that apply</Text>
+                  <View style={styles.optionRow}>
+                    {SPORT_OPTIONS.map((option) => {
+                      const selected = selectedDisciplines.includes(option);
+                      return (
+                        <TouchableOpacity
+                          key={option}
+                          style={[styles.optionChip, selected && styles.optionChipActive]}
+                          onPress={() => toggleDiscipline(option)}
+                          activeOpacity={0.8}
+                        >
+                          {selected && (
+                            <Ionicons name="checkmark" size={14} color="#ffffff" style={{ marginRight: 4 }} />
+                          )}
+                          <Text style={[styles.optionChipText, selected && styles.optionChipTextActive]}>
+                            {option}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
                   <Text style={styles.label}>Bio</Text>
                   <TextInput style={[styles.input, { height: 80 }]} value={bio} onChangeText={setBio} placeholder="Short bio" placeholderTextColor="#94a3b8" multiline />
@@ -279,7 +342,16 @@ export default function Profile() {
                   <TextInput style={styles.input} value={phoneNumber} onChangeText={setPhoneNumber} placeholder="Phone number" placeholderTextColor="#94a3b8" keyboardType="phone-pad" />
 
                   <Text style={styles.label}>Emergency Contact</Text>
-                  <TextInput style={styles.input} value={emergencyContact} onChangeText={setEmergencyContact} placeholder="Name & Phone" placeholderTextColor="#94a3b8" />
+                  <TextInput
+                    style={styles.input}
+                    value={emergencyContact}
+                    // Strip non-digits so the value stays numeric even on keyboards
+                    // that still allow letters or punctuation through.
+                    onChangeText={(text) => setEmergencyContact(text.replace(/[^0-9]/g, ''))}
+                    placeholder="Emergency contact number"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="number-pad"
+                  />
 
                   <Text style={styles.label}>Strava Handle</Text>
                   <TextInput style={styles.input} value={stravaHandle} onChangeText={setStravaHandle} placeholder="Strava profile link/handle" placeholderTextColor="#94a3b8" autoCapitalize="none" />
@@ -373,6 +445,21 @@ const styles = StyleSheet.create({
   flex1: { flex: 1 },
   label: { fontSize: 13, fontWeight: '600', color: '#64748b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   input: { borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, marginBottom: 16, backgroundColor: '#f8fafc', color: '#0f172a' },
+  helperText: { fontSize: 12, color: '#94a3b8', marginTop: -2, marginBottom: 8 },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  optionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  optionChipActive: { backgroundColor: '#0d9488', borderColor: '#0d9488' },
+  optionChipText: { fontSize: 14, fontWeight: '600', color: '#475569' },
+  optionChipTextActive: { color: '#ffffff' },
   saveButton: { backgroundColor: '#0d9488', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   saveButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '600' },
   cancelButton: { marginTop: 10, paddingVertical: 12, alignItems: 'center' },
