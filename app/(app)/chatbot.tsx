@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,14 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Keyboard,
+  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useHeaderHeight } from '@react-navigation/elements';
 
 // ---------------------------------------------------------------------------
 // Gemini API config
@@ -41,26 +43,12 @@ export default function ChatbotTab() {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0); // Tracks exact keyboard height
   const scrollRef = useRef<ScrollView>(null);
-  const insets = useSafeAreaInsets();
-  
-  // Space needed to clear the floating tab bar when keyboard is closed
-  const tabBarClearance = Math.max(insets.bottom, 12) + 8 + 72;
 
-  // Manually listen to keyboard events to get exact pixel height
-  useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardHeight(0);
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+  // Measured at runtime rather than hardcoded, so this adapts to any screen
+  // size, notch, gesture bar, or font scale.
+  const tabBarHeight = useBottomTabBarHeight();
+  const headerHeight = useHeaderHeight();
 
   function scrollToEnd() {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -127,9 +115,15 @@ export default function ChatbotTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      {/* We use edges={['top']} so the bottom padding doesn't conflict with our manual keyboardHeight */}
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.flex}>
+      {/* edges={[]} because the header and tab bar already account for insets;
+          KeyboardAvoidingView handles the rest. */}
+      <SafeAreaView style={styles.safeArea} edges={[]}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          // Offset by the header so the lifted content isn't pushed too far up.
+          keyboardVerticalOffset={headerHeight}
+        >
           <Text style={styles.heading}>Sporty AI</Text>
 
           <ScrollView
@@ -138,37 +132,37 @@ export default function ChatbotTab() {
             contentContainerStyle={styles.messagesContent}
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollToEnd}
+            keyboardShouldPersistTaps="handled"
           >
             {messages.map((m) => (
               <MessageBubble key={m.id} message={m} />
             ))}
             {loading && <TypingBubble />}
           </ScrollView>
-        </View>
 
-        {/* 
-          If keyboard is open, push the bar up by the exact keyboard height.
-          If closed, push it up by the tab bar clearance.
-        */}
-        <View style={[styles.inputBar, { marginBottom: keyboardHeight > 0 ? keyboardHeight + 20: tabBarClearance }]}>
-          <TextInput
-            style={styles.input}
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask about training, nutrition, recovery..."
-            placeholderTextColor="#94a3b8"
-            returnKeyType="send"
-            blurOnSubmit={false} // Prevents keyboard from closing on Enter
-            onSubmitEditing={handleSend} // Makes Enter key send & clear text
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!input.trim() || loading}
-          >
-            <Ionicons name="arrow-up" size={20} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
+          {/* Sits directly above the keyboard when open, above the floating
+              tab bar when closed. */}
+          <View style={[styles.inputBar, { marginBottom: tabBarHeight }]}>
+            <TextInput
+              style={styles.input}
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask about training, nutrition, recovery..."
+              placeholderTextColor="#94a3b8"
+              returnKeyType="send"
+              multiline
+              blurOnSubmit={false} // Prevents keyboard from closing on Enter
+              onSubmitEditing={handleSend} // Makes Enter key send & clear text
+            />
+            <TouchableOpacity
+              style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={!input.trim() || loading}
+            >
+              <Ionicons name="arrow-up" size={20} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
   );
