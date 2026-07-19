@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
 
@@ -28,6 +30,29 @@ interface Activity {
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+// Matches the format used by manage-posts.tsx so both screens store time the same way.
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+// Existing rows may hold free text ("6:00 AM - 7:30 AM"), so fall back to the
+// current time when the stored value isn't a simple clock time.
+function parseTimeToDate(value: string | null): Date {
+  const match = value?.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!match) return new Date();
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const meridiem = match[3]?.toUpperCase();
+
+  if (meridiem === 'PM' && hours < 12) hours += 12;
+  if (meridiem === 'AM' && hours === 12) hours = 0;
+
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
 export default function ManageActivities() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +65,16 @@ export default function ManageActivities() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [time, setTime] = useState('');
+  const [timeValue, setTimeValue] = useState<Date>(new Date());
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  const onTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      setTimeValue(selectedTime);
+      setTime(formatTime(selectedTime));
+    }
+  };
 
   useEffect(() => {
     fetchActivities();
@@ -63,6 +98,7 @@ export default function ManageActivities() {
     setTitle('');
     setDescription('');
     setTime('');
+    setTimeValue(new Date());
     setModalVisible(true);
   }
 
@@ -72,6 +108,8 @@ export default function ManageActivities() {
     setTitle(item.title);
     setDescription(item.description);
     setTime(item.time || '');
+    // Open the clock on the saved time rather than "now" when editing.
+    setTimeValue(parseTimeToDate(item.time));
     setModalVisible(true);
   }
 
@@ -81,12 +119,17 @@ export default function ManageActivities() {
       return;
     }
 
+    if (!time.trim()) {
+      Alert.alert('Validation Error', 'Please select a time for this activity.');
+      return;
+    }
+
     setIsSubmitting(true);
     const payload = {
       day: selectedDay,
       title: title.trim(),
       description: description.trim(),
-      time: time.trim() || null,
+      time: time.trim(),
     };
 
     try {
@@ -214,14 +257,26 @@ export default function ManageActivities() {
                 onChangeText={setTitle}
               />
 
-              <Text style={styles.inputLabel}>Time (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., 6:00 AM - 7:30 AM"
-                placeholderTextColor="#94a3b8"
-                value={time}
-                onChangeText={setTime}
-              />
+              <Text style={styles.inputLabel}>Time</Text>
+              <TouchableOpacity
+                style={styles.timePickerButton}
+                onPress={() => setShowTimePicker(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="time-outline" size={20} color="#0d9488" />
+                <Text style={[styles.timePickerText, !time && styles.timePickerPlaceholder]}>
+                  {time || 'Select a time'}
+                </Text>
+              </TouchableOpacity>
+
+              {showTimePicker && (
+                <DateTimePicker
+                  value={timeValue}
+                  mode="time"
+                  display="default"
+                  onChange={onTimeChange}
+                />
+              )}
 
               <Text style={styles.inputLabel}>Description</Text>
               <TextInput
@@ -375,6 +430,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   textArea: { height: 90, textAlignVertical: 'top' },
+  timePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    marginBottom: 16,
+  },
+  timePickerText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  timePickerPlaceholder: { color: '#94a3b8', fontWeight: '400' },
   submitButton: {
     backgroundColor: '#0d9488',
     borderRadius: 12,
