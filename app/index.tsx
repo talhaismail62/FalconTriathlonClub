@@ -3,7 +3,13 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useAuth } from '@/context/AuthContext';
 
 export default function Index() {
-  const { session, loading } = useAuth();
+  const { session, loading, isRecovering } = useAuth();
+
+  // Mid password-reset: the recovery session is real but must not be treated
+  // as a normal login.
+  if (isRecovering) {
+    return <Redirect href="/reset-password" />;
+  }
 
   if (loading) {
     return (

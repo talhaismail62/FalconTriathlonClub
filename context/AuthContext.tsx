@@ -10,16 +10,26 @@ const SESSION_START_KEY = 'ftc_session_start';
 type AuthContextValue = {
   session: Session | null;
   loading: boolean;
+  /**
+   * True between clicking a password-reset link and finishing (or abandoning)
+   * the reset. The recovery session is a real session, so without this flag the
+   * root redirect would drop the user into the app instead of the reset screen.
+   */
+  isRecovering: boolean;
+  endRecovery: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue>({
   session: null,
   loading: true,
+  isRecovering: false,
+  endRecovery: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecovering, setIsRecovering] = useState(false);
   const logoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Schedule the forced sign-out ──
@@ -80,12 +90,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, newSession) => {
         setSession(newSession);
 
-        if (event === 'SIGNED_IN' && newSession) {
+        if (event === 'PASSWORD_RECOVERY') {
+          // Recovery session: hold the user on the reset screen rather than
+          // letting the root redirect treat this as a normal login.
+          setIsRecovering(true);
+        } else if (event === 'SIGNED_IN' && newSession) {
           await AsyncStorage.setItem(SESSION_START_KEY, String(Date.now()));
           scheduleAutoLogout(SESSION_DURATION_MS);
         } else if (event === 'SIGNED_OUT') {
           await AsyncStorage.removeItem(SESSION_START_KEY);
           clearAutoLogout();
+          setIsRecovering(false);
         }
       }
     );
@@ -98,7 +113,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, loading }}>
+    <AuthContext.Provider
+      value={{ session, loading, isRecovering, endRecovery: () => setIsRecovering(false) }}
+    >
       {children}
     </AuthContext.Provider>
   );

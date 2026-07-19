@@ -57,13 +57,21 @@ export default function Login() {
     }
 
     setResetting(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    // Send the user back into the app (not Supabase's hosted page) so they can
+    // actually set a new password. Must be allow-listed in Supabase Auth settings.
+    const redirectTo = Linking.createURL('reset-password');
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+    });
     setResetting(false);
 
     if (error) {
       Alert.alert('Error', error.message);
     } else {
-      Alert.alert('Check your email', 'We sent you a password reset link.');
+      Alert.alert(
+        'Check your email',
+        'We sent you a password reset link. Open it on this device to set a new password.'
+      );
     }
   }
 
