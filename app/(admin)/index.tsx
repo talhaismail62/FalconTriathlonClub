@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,6 @@ import { CardContainer } from '@/components/UI';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   return (
     <LinearGradient 
@@ -17,10 +16,6 @@ export default function AdminDashboard() {
       end={{ x: 0.8, y: 0.8 }} 
       style={styles.container}
     >
-      {/* 
-        edges={['bottom']} ensures it doesn't double-pad the top, 
-        since the Stack header in _layout.tsx is now solid and handles the top safe area.
-      */}
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         
         <View style={styles.header}>
@@ -43,6 +38,26 @@ export default function AdminDashboard() {
                 <View style={styles.cardContent}>
                   <Text style={styles.cardTitle}>Manage Posts</Text>
                   <Text style={styles.cardDesc}>Create, update, or delete club updates</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+              </View>
+            </CardContainer>
+          </TouchableOpacity>
+
+          {/* Button to Manage Activities (Added by buddy - Defect #6) */}
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => router.push('/(admin)/manage-activities')}
+            style={styles.touchableMargin}
+          >
+            <CardContainer>
+              <View style={styles.cardRow}>
+                <View style={styles.iconWrapper}>
+                  <Ionicons name="calendar-outline" size={24} color="#0d9488" />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>Manage Activities</Text>
+                  <Text style={styles.cardDesc}>Create, edit, or delete weekly activities</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
               </View>
@@ -84,7 +99,7 @@ const styles = StyleSheet.create({
   header: { 
     paddingHorizontal: 16, 
     paddingBottom: 20,
-    paddingTop: 10, // Added a tiny bit of top padding since header is handled by layout
+    paddingTop: 10,
   },
   headerTitle: { 
     fontSize: 28, 

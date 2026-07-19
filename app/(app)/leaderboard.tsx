@@ -272,7 +272,7 @@ function LeaderRow({ rank, entry }: { rank: number; entry: Entry }) {
           {entry.username || 'Unknown'}
         </Text>
         <View style={styles.scorePill}>
-          <Text style={styles.scoreValue}>{entry.score.toFixed(1)}</Text>
+          <Text style={styles.scoreValue}>{(entry.score ?? 0).toFixed(1)}</Text>
           <Text style={styles.scoreLabel}>pts</Text>
         </View>
       </View>

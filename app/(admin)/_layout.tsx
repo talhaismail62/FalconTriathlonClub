@@ -78,6 +78,7 @@ export default function AdminLayout() {
       <Stack.Screen name="index" options={{ title: 'Admin Panel' }} />
       <Stack.Screen name="manage-posts" options={{ title: 'Manage Posts' }} />
       <Stack.Screen name="verify-payments" options={{ title: 'Verify Payments' }} />
+      <Stack.Screen name="manage-activities" options={{ title: 'Manage Activities' }} />
     </Stack>
   );
 }

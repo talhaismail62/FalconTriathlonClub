@@ -1,6 +1,5 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientHeader from '@/components/GradientHeader';
@@ -94,9 +93,11 @@ export default function AppLayout() {
       />
 
       {/* ── Deprecated/Removed features hidden from tabs (Defects #6, #7, #18) ── */}
-      {/* The physical files have been deleted or moved; these entries prevent Expo
-          Router from auto-discovering any leftover routes. */}
+      {/* Activities file still exists, so we just hide it from the tab bar */}
       <Tabs.Screen name="activities" options={{ href: null, headerShown: false }} />
+      
+      {/* DO NOT add map, merchandise, or registration here. 
+          Their files were deleted, so Expo Router won't look for them. */}
     </Tabs>
   );
 }

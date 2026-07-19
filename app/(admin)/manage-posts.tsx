@@ -9,11 +9,13 @@ import {
   TouchableOpacity, 
   Alert 
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { File } from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { CardContainer, GradientButton } from '@/components/UI';
@@ -45,8 +47,6 @@ export default function ManagePosts() {
   
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  
-  const insets = useSafeAreaInsets();
 
   useEffect(() => { fetchPosts(); }, []);
 
@@ -99,11 +99,22 @@ export default function ManagePosts() {
 
     if (imageUri && session?.user) {
       try {
-        const blob = await (await fetch(imageUri)).blob();
-        const ext = imageUri.split('.').pop();
+        // Buddy's Fix: Use base64 arrayBuffer to avoid 0-byte uploads on Android
+        const ext = (imageUri.split('.').pop()?.split('?')[0] || 'jpg').toLowerCase();
         const path = `posts/${Date.now()}.${ext}`;
-        const { error } = await supabase.storage.from('post_images').upload(path, blob);
-        if (!error) imagePath = path;
+        const fileInstance = new File(imageUri);
+        const base64 = await fileInstance.base64();
+        const arrayBuffer = decode(base64);
+        
+        const { error: uploadError } = await supabase.storage
+          .from('post_images')
+          .upload(path, arrayBuffer, { contentType: `image/${ext}`, upsert: true });
+
+        if (!uploadError) {
+          imagePath = path;
+        } else {
+          console.error("Upload error:", uploadError);
+        }
       } catch (err) {
         console.error(err);
       }
@@ -139,10 +150,8 @@ export default function ManagePosts() {
 
   return (
     <LinearGradient colors={['#ffffff', '#0d9488']} start={{ x: 0.2, y: 0.2 }} end={{ x: 0.8, y: 0.8 }} style={styles.container}>
-      {/* edges={['bottom']} prevents double padding since header is solid in _layout.tsx */}
       <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         
-        {/* Consistent Black Top Heading */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Manage Club Content</Text>
           <Text style={styles.headerSubtitle}>Create, update, or delete posts</Text>
@@ -228,8 +237,8 @@ export default function ManagePosts() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 10 }, // Small padding top since header is solid
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' }, // Deep black title
+  header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 10 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
   headerSubtitle: { fontSize: 14, color: '#64748b', fontWeight: '500', marginTop: 2 },
   form: { paddingVertical: 8, gap: 12 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: '#0f172a' },

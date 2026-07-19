@@ -6,10 +6,17 @@ import {
   FlatList, 
   Image, 
   ActivityIndicator, 
+<<<<<<< HEAD
   RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
+=======
+  TouchableOpacity
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+>>>>>>> TI
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';

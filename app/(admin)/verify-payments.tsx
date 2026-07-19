@@ -9,7 +9,7 @@ import {
   Alert,
   RefreshControl
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
@@ -27,7 +27,6 @@ interface Order {
 export default function VerifyPayments() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const insets = useSafeAreaInsets();
 
   useEffect(() => { fetchPendingOrders(); }, []);
 

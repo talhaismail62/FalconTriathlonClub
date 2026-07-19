@@ -40,7 +40,9 @@ export default function Signup() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: name } },
+      // Store under both keys: the rest of the app reads `name`, but keep
+      // `full_name` for backwards compatibility with anything expecting it.
+      options: { data: { full_name: name, name } },
     });
 
     if (error) {

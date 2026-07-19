@@ -59,10 +59,10 @@ export default function ActivitiesTab() {
   );
 
   async function fetchActivities() {
+    // Defect #26: Fetch from weekly_activities instead of posts
     const { data, error } = await supabase
-      .from('posts')
-      .select('id, title, description, image_url, created_at, day, time')
-      .eq('is_weekly_activity', true);
+      .from('weekly_activities')
+      .select('*');
 
     if (!error && data) {
       const sorted = (data as Activity[]).sort((a, b) => 
