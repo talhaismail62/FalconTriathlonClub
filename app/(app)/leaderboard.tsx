@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -54,6 +54,23 @@ function normalise(raw: any): Board {
   };
 }
 
+// Names the selected period, e.g. "March 2026" or "2021". Naming it back to the
+// user confirms the app understood the request rather than simply failing.
+function describePeriod(scope: Scope, month: number, year: number): string {
+  return scope === 'monthly' ? `${MONTHS[month - 1]} ${year}` : String(year);
+}
+
+// Phrases how old the cached standings are, e.g. "from 5m ago".
+function describeAge(savedAt: number | null): string {
+  if (!savedAt) return '';
+  const mins = Math.floor((Date.now() - savedAt) / 60000);
+  if (mins < 1) return 'from moments ago';
+  if (mins < 60) return `from ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `from ${hours}h ago`;
+  return `from ${Math.floor(hours / 24)}d ago`;
+}
+
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
 
@@ -72,6 +89,24 @@ export default function LeaderboardTab() {
 
   const [picker, setPicker] = useState<null | 'month' | 'year'>(null);
 
+  // Cached results are shown instantly while fresh ones load, so the user needs
+  // to know whether what they're looking at is current.
+  const [showingCached, setShowingCached] = useState(false);
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [justUpdated, setJustUpdated] = useState(false);
+
+  // True only once the server has successfully answered for the current period
+  // and returned nothing. Distinguishes "we asked, there's genuinely no data"
+  // from "still loading" or "the request failed".
+  const [confirmedEmpty, setConfirmedEmpty] = useState(false);
+
+  // fetchBoard is memoized, so read this through a ref to avoid capturing a
+  // stale value of showingCached.
+  const showingCachedRef = useRef(false);
+  useEffect(() => {
+    showingCachedRef.current = showingCached;
+  }, [showingCached]);
+
   const getCacheKey = useCallback(() => {
     return `@leaderboard_cache_${scope}_${month}_${year}`;
   }, [scope, month, year]);
@@ -87,10 +122,31 @@ export default function LeaderboardTab() {
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const json = await res.json();
       const normalised = normalise(json);
+      const hadStaleData = showingCachedRef.current;
+
       setBoard(normalised);
-      await AsyncStorage.setItem(getCacheKey(), JSON.stringify(normalised));
+      setShowingCached(false);
+      setCachedAt(Date.now());
+
+      // The period is only genuinely empty when neither board has entries.
+      setConfirmedEmpty(
+        normalised.male.length === 0 && normalised.female.length === 0
+      );
+
+      // Only announce the refresh if the user was actually looking at stale
+      // data — otherwise it's just noise on a normal first load.
+      if (hadStaleData) {
+        setJustUpdated(true);
+        setTimeout(() => setJustUpdated(false), 3000);
+      }
+
+      await AsyncStorage.setItem(
+        getCacheKey(),
+        JSON.stringify({ board: normalised, savedAt: Date.now() })
+      );
     } catch (e: any) {
-      setBoard(EMPTY_BOARD);
+      // Keep any cached rankings on screen rather than blanking the list —
+      // stale data beats no data when the user is offline.
       setError(
         e?.message === 'Network request failed'
           ? `Could not reach the leaderboard server at ${API_URL}. Is it running?`
@@ -102,13 +158,25 @@ export default function LeaderboardTab() {
   useEffect(() => {
     let active = true;
     
-    // Load from cache first for instant rendering (Defect #8)
+    // Load from cache first for instant rendering (Defect #8). Flag it as stale
+    // so the banner can tell the user fresher results are on the way.
+    setShowingCached(false);
+    setCachedAt(null);
+    // Clear so the previous period's "no data" can't flash against the new one.
+    setConfirmedEmpty(false);
+
     AsyncStorage.getItem(getCacheKey()).then((cached) => {
-      if (cached && active) {
-        try {
-          setBoard(JSON.parse(cached));
-        } catch {}
-      }
+      if (!cached || !active) return;
+      try {
+        const parsed = JSON.parse(cached);
+        // Older cache entries stored the board directly, without a timestamp.
+        const cachedBoard: Board = parsed?.board ?? parsed;
+        if (!cachedBoard?.male && !cachedBoard?.female) return;
+
+        setBoard(cachedBoard);
+        setCachedAt(parsed?.savedAt ?? null);
+        setShowingCached(true);
+      } catch {}
     });
 
     setLoading(true);
@@ -120,8 +188,22 @@ export default function LeaderboardTab() {
 
   async function onRefresh() {
     setRefreshing(true);
+    // Treat a manual pull as "current data is stale" so the success banner
+    // confirms the refresh actually landed.
+    showingCachedRef.current = true;
     await fetchBoard();
     setRefreshing(false);
+  }
+
+  // An empty period is often a wrong-period selection, so offer a one-tap way
+  // back instead of making the user reopen the picker.
+  const isCurrentPeriod =
+    year === now.getFullYear() &&
+    (scope === 'yearly' || month === now.getMonth() + 1);
+
+  function goToCurrentPeriod() {
+    setYear(now.getFullYear());
+    setMonth(now.getMonth() + 1);
   }
 
   const list = board[gender];
@@ -191,10 +273,40 @@ export default function LeaderboardTab() {
             ))}
           </View>
 
+          {/* Tell the user when the standings on screen aren't current yet. */}
+          {showingCached && !error && (
+            <View style={styles.staleBanner}>
+              <ActivityIndicator size="small" color="#b45309" />
+              <Text style={styles.staleText}>
+                Showing saved standings {describeAge(cachedAt)} — updating in the background…
+              </Text>
+            </View>
+          )}
+
+          {justUpdated && (
+            <View style={styles.freshBanner}>
+              <Ionicons name="checkmark-circle" size={18} color="#0f766e" />
+              <Text style={styles.freshText}>Leaderboard updated</Text>
+            </View>
+          )}
+
+          {/* Refresh failed but we still have saved standings to show. */}
+          {error && list.length > 0 && (
+            <View style={styles.offlineBanner}>
+              <Ionicons name="cloud-offline-outline" size={18} color="#b91c1c" />
+              <Text style={styles.offlineText}>
+                Couldn&apos;t refresh — showing saved standings {describeAge(cachedAt)}.
+              </Text>
+              <TouchableOpacity onPress={onRefresh}>
+                <Text style={styles.offlineRetry}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Added list.length === 0 check so cached data doesn't disappear behind a spinner */}
           {loading && list.length === 0 ? (
             <ActivityIndicator color="#0d9488" size="large" style={{ marginTop: 40 }} />
-          ) : error ? (
+          ) : error && list.length === 0 ? (
             <View style={styles.messageCard}>
               <Ionicons name="cloud-offline-outline" size={28} color="#ef4444" />
               <Text style={styles.errorText}>{error}</Text>
@@ -202,11 +314,31 @@ export default function LeaderboardTab() {
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             </View>
+          ) : confirmedEmpty ? (
+            /* Server answered and had nothing for this period at all. */
+            <View style={styles.messageCard}>
+              <Ionicons name="calendar-clear-outline" size={28} color="#94a3b8" />
+              <Text style={styles.noDataTitle}>
+                No data for {describePeriod(scope, month, year)}
+              </Text>
+              <Text style={styles.emptyText}>
+                No activities were recorded for this {scope === 'monthly' ? 'month' : 'year'}.
+              </Text>
+              {!isCurrentPeriod && (
+                <TouchableOpacity onPress={goToCurrentPeriod} style={styles.retryBtn}>
+                  <Text style={styles.retryText}>
+                    Go to {scope === 'monthly' ? 'this month' : 'this year'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ) : list.length === 0 ? (
+            /* This gender's board is empty, but the period does have data. */
             <View style={styles.messageCard}>
               <Ionicons name="trophy-outline" size={28} color="#94a3b8" />
               <Text style={styles.emptyText}>
-                No scores for this {scope === 'monthly' ? 'month' : 'year'} yet.
+                No {gender === 'male' ? 'men' : 'women'}&apos;s scores for{' '}
+                {describePeriod(scope, month, year)} yet.
               </Text>
             </View>
           ) : (
@@ -359,8 +491,54 @@ const styles = StyleSheet.create({
   modalOptionTextActive: { color: '#0d9488', fontWeight: '800' },
 
   messageCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 24, alignItems: 'center', marginTop: 20, gap: 10 },
+
+  // "Saved standings, updating…" — amber, matches a cautionary tone.
+  staleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  staleText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: '#b45309', lineHeight: 17 },
+
+  // "Leaderboard updated" — teal, matches the app's success colour.
+  freshBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  freshText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: '#0f766e' },
+
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  offlineText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: '#b91c1c', lineHeight: 17 },
+  offlineRetry: { fontSize: 12.5, fontWeight: '800', color: '#0d9488' },
   errorText: { color: '#ef4444', fontWeight: '600', textAlign: 'center' },
   emptyText: { color: '#64748b', fontWeight: '600', textAlign: 'center' },
+  noDataTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
   retryBtn: { marginTop: 6, backgroundColor: '#0d9488', paddingVertical: 8, paddingHorizontal: 20, borderRadius: 10 },
   retryText: { color: '#ffffff', fontWeight: '700' },
 
