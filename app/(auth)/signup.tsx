@@ -40,9 +40,7 @@ export default function Signup() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      // Store under both keys: the rest of the app reads `name`, but keep
-      // `full_name` for backwards compatibility with anything expecting it.
-      options: { data: { full_name: name, name } },
+      options: { data: { full_name: name } },
     });
 
     if (error) {
@@ -147,12 +145,17 @@ export default function Signup() {
       style={styles.container}
     >
       <KeyboardAvoidingView
-        style={styles.inner}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            padding: 24,
+            paddingTop: 60, // Pushes content down from the top
+            paddingBottom: 40,
+          }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
