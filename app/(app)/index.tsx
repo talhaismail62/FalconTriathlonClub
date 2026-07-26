@@ -13,12 +13,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
 import { openMapLocation } from '@/lib/location';
 
@@ -48,6 +50,29 @@ interface JerseySizeEntry {
   running_quantity: number;
   cycling_size: string;
   cycling_quantity: number;
+}
+
+interface Member {
+  email: string;
+  name: string | null;
+}
+
+interface BillParticipant {
+  id: string;
+  bill_id: string;
+  email: string;
+  name: string | null;
+  guest_count: number;
+  has_paid: boolean;
+}
+
+interface Bill {
+  id: string;
+  created_by: string;
+  amount: number;
+  bill_date: string;
+  created_at: string;
+  participants: BillParticipant[];
 }
 
 const INSTAGRAM_URL = 'https://www.instagram.com/falcontriathlonclub/';
@@ -137,10 +162,25 @@ export default function HomeTab() {
   const [isLoadingJerseyList, setIsLoadingJerseyList] = useState(false);
   const [jerseyEntries, setJerseyEntries] = useState<JerseySizeEntry[]>([]);
 
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [billsModalVisible, setBillsModalVisible] = useState(false);
+  const [billsView, setBillsView] = useState<'active' | 'history'>('active');
+
+  const [createBillModalVisible, setCreateBillModalVisible] = useState(false);
+  const [isSavingBill, setIsSavingBill] = useState(false);
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  const [billAmount, setBillAmount] = useState('');
+  const [billDate, setBillDate] = useState<Date>(new Date());
+  const [showBillDatePicker, setShowBillDatePicker] = useState(false);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [allMembers, setAllMembers] = useState<Member[]>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<Map<string, { name: string | null; guestCount: number }>>(new Map());
+
   useFocusEffect(
     useCallback(() => {
       fetchHome();
       checkAdminStatus();
+      fetchBills();
     }, [])
   );
 
@@ -260,6 +300,215 @@ export default function HomeTab() {
     setIsLoadingJerseyList(false);
   }
 
+  async function fetchBills() {
+    const { data, error } = await supabase
+      .from('bills')
+      .select('id, created_by, amount, bill_date, created_at, bill_participants(id, bill_id, email, name, guest_count, has_paid)')
+      .order('bill_date', { ascending: false });
+
+    if (!error && data) {
+      setBills(
+        data.map((b: any) => ({
+          id: b.id,
+          created_by: b.created_by,
+          amount: b.amount,
+          bill_date: b.bill_date,
+          created_at: b.created_at,
+          participants: b.bill_participants || [],
+        }))
+      );
+    }
+  }
+
+  function billTotalShares(bill: Bill): number {
+    return bill.participants.reduce((sum, p) => sum + 1 + p.guest_count, 0);
+  }
+
+  function billIsSettled(bill: Bill): boolean {
+    return bill.participants.length > 0 && bill.participants.every((p) => p.has_paid);
+  }
+
+  async function toggleParticipantPaid(participant: BillParticipant) {
+    const { error } = await supabase
+      .from('bill_participants')
+      .update({ has_paid: !participant.has_paid, paid_at: !participant.has_paid ? new Date().toISOString() : null })
+      .eq('id', participant.id);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+    fetchBills();
+  }
+
+  async function openCreateBillModal() {
+    setEditingBillId(null);
+    setBillAmount('');
+    setBillDate(new Date());
+    setMemberSearch('');
+    setSelectedParticipants(new Map());
+
+    const { data } = await supabase.from('myusers').select('email, name').order('name', { ascending: true });
+    setAllMembers((data as Member[]) || []);
+
+    // Creator is always included in the split.
+    if (email) {
+      const self = (data as Member[] | null)?.find((m) => m.email.toLowerCase() === email.toLowerCase());
+      setSelectedParticipants(new Map([[email.toLowerCase(), { name: self?.name || null, guestCount: 0 }]]));
+    }
+
+    setCreateBillModalVisible(true);
+  }
+
+  async function openEditBillModal(bill: Bill) {
+    setEditingBillId(bill.id);
+    setBillAmount(String(bill.amount));
+    setBillDate(new Date(bill.bill_date));
+    setMemberSearch('');
+
+    const { data } = await supabase.from('myusers').select('email, name').order('name', { ascending: true });
+    setAllMembers((data as Member[]) || []);
+
+    const map = new Map<string, { name: string | null; guestCount: number }>();
+    bill.participants.forEach((p) => {
+      map.set(p.email.toLowerCase(), { name: p.name, guestCount: p.guest_count });
+    });
+    setSelectedParticipants(map);
+
+    setCreateBillModalVisible(true);
+  }
+
+  function toggleParticipantSelected(member: Member) {
+    setSelectedParticipants((prev) => {
+      const next = new Map(prev);
+      const key = member.email.toLowerCase();
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.set(key, { name: member.name, guestCount: 0 });
+      }
+      return next;
+    });
+  }
+
+  function adjustGuestCount(email: string, delta: number) {
+    setSelectedParticipants((prev) => {
+      const next = new Map(prev);
+      const key = email.toLowerCase();
+      const current = next.get(key);
+      if (!current) return prev;
+      next.set(key, { ...current, guestCount: Math.max(0, current.guestCount + delta) });
+      return next;
+    });
+  }
+
+  const onBillDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    setShowBillDatePicker(false);
+    if (selectedDate) setBillDate(selectedDate);
+  };
+
+  async function handleSaveBill() {
+    const parsedAmount = parseFloat(billAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      Alert.alert('Validation Error', 'Please enter a valid bill amount.');
+      return;
+    }
+    if (selectedParticipants.size === 0) {
+      Alert.alert('Validation Error', 'Please select at least one participant.');
+      return;
+    }
+
+    setIsSavingBill(true);
+    try {
+      let billId = editingBillId;
+
+      if (editingBillId) {
+        const { error } = await supabase
+          .from('bills')
+          .update({ amount: parsedAmount, bill_date: billDate.toISOString().slice(0, 10) })
+          .eq('id', editingBillId);
+        if (error) throw error;
+
+        // Diff against the currently-loaded participants so anyone who already
+        // ticked "paid" keeps that status — only membership/guest_count changes apply.
+        const existingBill = bills.find((b) => b.id === editingBillId);
+        const existingByEmail = new Map((existingBill?.participants || []).map((p) => [p.email.toLowerCase(), p]));
+
+        const toRemove = (existingBill?.participants || []).filter(
+          (p) => !selectedParticipants.has(p.email.toLowerCase())
+        );
+        if (toRemove.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('bill_participants')
+            .delete()
+            .in('id', toRemove.map((p) => p.id));
+          if (deleteError) throw deleteError;
+        }
+
+        for (const [participantEmail, info] of selectedParticipants.entries()) {
+          const existing = existingByEmail.get(participantEmail);
+          if (existing) {
+            if (existing.guest_count !== info.guestCount) {
+              const { error: updateError } = await supabase
+                .from('bill_participants')
+                .update({ guest_count: info.guestCount })
+                .eq('id', existing.id);
+              if (updateError) throw updateError;
+            }
+          } else {
+            const { error: insertError } = await supabase.from('bill_participants').insert({
+              bill_id: billId,
+              email: participantEmail,
+              name: info.name,
+              guest_count: info.guestCount,
+            });
+            if (insertError) throw insertError;
+          }
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('bills')
+          .insert({ created_by: email.toLowerCase(), amount: parsedAmount, bill_date: billDate.toISOString().slice(0, 10) })
+          .select('id')
+          .single();
+        if (error) throw error;
+        billId = data.id;
+
+        const participantRows = Array.from(selectedParticipants.entries()).map(([participantEmail, info]) => ({
+          bill_id: billId,
+          email: participantEmail,
+          name: info.name,
+          guest_count: info.guestCount,
+        }));
+
+        const { error: insertError } = await supabase.from('bill_participants').insert(participantRows);
+        if (insertError) throw insertError;
+      }
+
+      setCreateBillModalVisible(false);
+      await fetchBills();
+    } catch (err: any) {
+      Alert.alert('Error Saving', err.message || 'Could not save bill.');
+    } finally {
+      setIsSavingBill(false);
+    }
+  }
+
+  function handleDeleteBill(id: string) {
+    Alert.alert('Delete Bill', 'Are you sure you want to delete this bill?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.from('bills').delete().eq('id', id);
+          if (error) Alert.alert('Error', error.message);
+          else fetchBills();
+        },
+      },
+    ]);
+  }
+
   function renderPost(item: Post) {
     const imageUrl = item.image_url
       ? supabase.storage.from('post_images').getPublicUrl(item.image_url).data.publicUrl
@@ -350,6 +599,68 @@ export default function HomeTab() {
     );
   }
 
+  function renderBill(bill: Bill) {
+    const totalShares = billTotalShares(bill);
+    const perShare = totalShares > 0 ? bill.amount / totalShares : 0;
+    const isCreator = bill.created_by.toLowerCase() === email.toLowerCase();
+    const paidCount = bill.participants.filter((p) => p.has_paid).length;
+
+    return (
+      <View key={bill.id} style={styles.billCard}>
+        <View style={styles.billHeader}>
+          <View style={styles.flex1}>
+            <Text style={styles.billAmount}>Rs {bill.amount.toFixed(2)}</Text>
+            <Text style={styles.billDate}>
+              {new Date(bill.bill_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </Text>
+          </View>
+          <View style={styles.billProgressPill}>
+            <Text style={styles.billProgressText}>
+              {paidCount}/{bill.participants.length} paid
+            </Text>
+          </View>
+        </View>
+
+        {bill.participants.map((p) => {
+          const owed = perShare * (1 + p.guest_count);
+          const isSelf = p.email.toLowerCase() === email.toLowerCase();
+          return (
+            <View key={p.id} style={styles.billParticipantRow}>
+              <TouchableOpacity
+                style={styles.billCheckbox}
+                onPress={() => isSelf && toggleParticipantPaid(p)}
+                disabled={!isSelf}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkboxBox, p.has_paid && styles.checkboxBoxChecked]}>
+                  {p.has_paid && <Ionicons name="checkmark" size={14} color="#ffffff" />}
+                </View>
+              </TouchableOpacity>
+              <View style={styles.flex1}>
+                <Text style={styles.billParticipantName}>
+                  {p.name || p.email}
+                  {p.guest_count > 0 ? ` +${p.guest_count} guest${p.guest_count > 1 ? 's' : ''}` : ''}
+                </Text>
+              </View>
+              <Text style={styles.billParticipantAmount}>Rs {owed.toFixed(2)}</Text>
+            </View>
+          );
+        })}
+
+        {isCreator && (
+          <View style={styles.billActionRow}>
+            <TouchableOpacity style={styles.billEditBtn} onPress={() => openEditBillModal(bill)}>
+              <Text style={styles.billEditText}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.billDeleteBtn} onPress={() => handleDeleteBill(bill.id)}>
+              <Text style={styles.billDeleteText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+
   return (
     <LinearGradient
       colors={['#ffffff', '#0d9488']}
@@ -402,6 +713,24 @@ export default function HomeTab() {
                   )}
               </View>
             )}
+
+            {/* ── Bill Splitting ── */}
+            <View style={[styles.sectionSpacing]}>
+              <TouchableOpacity
+                style={styles.jerseyBlock}
+                activeOpacity={0.85}
+                onPress={() => setBillsModalVisible(true)}
+              >
+                <View style={styles.jerseyIconWrap}>
+                  <Ionicons name="receipt-outline" size={24} color="#0d9488" />
+                </View>
+                <View style={styles.jerseyBody}>
+                  <Text style={styles.jerseyTitle}>Split a Bill</Text>
+                  <Text style={styles.jerseySubtitle}>Float a meal bill and track who's paid</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
 
             {/* ── Jersey Sizes ── */}
             <View style={[styles.sectionSpacing]}>
@@ -627,6 +956,185 @@ export default function HomeTab() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={billsModalVisible}
+        onRequestClose={() => setBillsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Split a Bill</Text>
+              <TouchableOpacity onPress={() => setBillsModalVisible(false)}>
+                <Text style={styles.closeModalText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.billTabRow}>
+              <TouchableOpacity
+                style={[styles.billTab, billsView === 'active' && styles.billTabActive]}
+                onPress={() => setBillsView('active')}
+              >
+                <Text style={[styles.billTabText, billsView === 'active' && styles.billTabTextActive]}>Active</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.billTab, billsView === 'history' && styles.billTabActive]}
+                onPress={() => setBillsView('history')}
+              >
+                <Text style={[styles.billTabText, billsView === 'history' && styles.billTabTextActive]}>History</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.newBillButton}
+              onPress={() => {
+                setBillsModalVisible(false);
+                openCreateBillModal();
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={18} color="#ffffff" />
+              <Text style={styles.newBillButtonText}>New Bill</Text>
+            </TouchableOpacity>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {(() => {
+                const filtered = bills.filter((b) => (billsView === 'active' ? !billIsSettled(b) : billIsSettled(b)));
+                if (filtered.length === 0) {
+                  return (
+                    <View style={styles.emptyCard}>
+                      <Text style={styles.emptyText}>
+                        {billsView === 'active' ? 'No active bills.' : 'No settled bills yet.'}
+                      </Text>
+                    </View>
+                  );
+                }
+                return filtered.map(renderBill);
+              })()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={createBillModalVisible}
+        onRequestClose={() => setCreateBillModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingBillId ? 'Edit Bill' : 'New Bill'}</Text>
+              <TouchableOpacity onPress={() => setCreateBillModalVisible(false)}>
+                <Text style={styles.closeModalText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Amount</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 2500"
+                placeholderTextColor="#94a3b8"
+                value={billAmount}
+                onChangeText={setBillAmount}
+                keyboardType="decimal-pad"
+              />
+
+              <Text style={styles.inputLabel}>Date</Text>
+              <TouchableOpacity
+                style={styles.timePickerButton}
+                onPress={() => setShowBillDatePicker(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar-outline" size={20} color="#0d9488" />
+                <Text style={styles.timePickerText}>
+                  {billDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </TouchableOpacity>
+
+              {showBillDatePicker && (
+                <DateTimePicker value={billDate} mode="date" display="default" onChange={onBillDateChange} />
+              )}
+
+              <Text style={[styles.inputLabel, styles.fieldSpacing]}>Participants</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Search members..."
+                placeholderTextColor="#94a3b8"
+                value={memberSearch}
+                onChangeText={setMemberSearch}
+              />
+
+              <View style={styles.memberListBox}>
+                {allMembers
+                  .filter((m) => {
+                    const label = (m.name || m.email).toLowerCase();
+                    return label.includes(memberSearch.toLowerCase());
+                  })
+                  .map((m) => {
+                    const key = m.email.toLowerCase();
+                    const selected = selectedParticipants.get(key);
+                    const isSelected = !!selected;
+                    return (
+                      <View key={m.email} style={styles.memberRow}>
+                        <TouchableOpacity
+                          style={styles.memberRowMain}
+                          onPress={() => toggleParticipantSelected(m)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.checkboxBox, isSelected && styles.checkboxBoxChecked]}>
+                            {isSelected && <Ionicons name="checkmark" size={14} color="#ffffff" />}
+                          </View>
+                          <Text style={styles.memberRowText} numberOfLines={1}>
+                            {m.name || m.email}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {isSelected && (
+                          <View style={styles.guestStepper}>
+                            <TouchableOpacity
+                              style={styles.guestStepperButton}
+                              onPress={() => adjustGuestCount(m.email, -1)}
+                            >
+                              <Ionicons name="remove" size={14} color="#0d9488" />
+                            </TouchableOpacity>
+                            <Text style={styles.guestStepperValue}>+{selected.guestCount}</Text>
+                            <TouchableOpacity
+                              style={styles.guestStepperButton}
+                              onPress={() => adjustGuestCount(m.email, 1)}
+                            >
+                              <Ionicons name="add" size={14} color="#0d9488" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.submitButton, isSavingBill && styles.disabledButton]}
+                onPress={handleSaveBill}
+                disabled={isSavingBill}
+              >
+                {isSavingBill ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>
+                    {editingBillId ? 'Save Changes' : 'Create Bill'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -841,6 +1349,149 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
   disabledButton: { opacity: 0.5 },
+
+  // Bill splitting
+  flex1: { flex: 1 },
+  input: {
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    backgroundColor: '#f8fafc',
+    color: '#0f172a',
+    marginBottom: 16,
+  },
+  timePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    marginBottom: 16,
+  },
+  timePickerText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  billTabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+  },
+  billTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  billTabActive: { backgroundColor: '#ffffff' },
+  billTabText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  billTabTextActive: { color: '#0d9488' },
+  newBillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0d9488',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  newBillButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  billCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  billHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  billAmount: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  billDate: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  billProgressPill: {
+    backgroundColor: '#ccfbf1',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  billProgressText: { fontSize: 12, fontWeight: '700', color: '#0f766e' },
+  billParticipantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  billCheckbox: { padding: 2 },
+  checkboxBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#0d9488',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  checkboxBoxChecked: { backgroundColor: '#0d9488' },
+  billParticipantName: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  billParticipantAmount: { fontSize: 14, fontWeight: '700', color: '#0d9488' },
+  billActionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
+  billEditBtn: {
+    backgroundColor: '#ccfbf1',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  billEditText: { color: '#0d9488', fontWeight: '700', fontSize: 12 },
+  billDeleteBtn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  billDeleteText: { color: '#ef4444', fontWeight: '700', fontSize: 12 },
+  memberListBox: {
+    maxHeight: 260,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 8,
+  },
+  memberRowMain: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  memberRowText: { fontSize: 14, fontWeight: '600', color: '#0f172a', flexShrink: 1 },
+  guestStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  guestStepperButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f0fdfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestStepperValue: { fontSize: 13, fontWeight: '700', color: '#0f172a', minWidth: 26, textAlign: 'center' },
 
   // Quick links
   quickLinkRow: { flexDirection: 'row', gap: 12 },
