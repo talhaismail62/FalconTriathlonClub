@@ -6,7 +6,8 @@ import {
   FlatList, 
   Image, 
   ActivityIndicator, 
-  RefreshControl
+  RefreshControl,
+  TouchableOpacity
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -15,12 +16,15 @@ import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { openMapLocation } from '@/lib/location';
 
 interface Post {
   id: string;
   title: string;
   description: string;
   image_url: string | null;
+  location_name: string | null;
+  location_url: string | null;
   created_at: string;
 }
 
@@ -63,7 +67,7 @@ export default function HomeTab() {
   async function fetchPosts() {
     const { data, error } = await supabase
       .from('posts')
-      .select('id, title, description, image_url, created_at')
+      .select('id, title, description, image_url, location_name, location_url, created_at')
       .eq('is_weekly_activity', false)
       .order('created_at', { ascending: false });
 
@@ -103,6 +107,21 @@ export default function HomeTab() {
           </View>
 
           <Text style={styles.postDescription}>{item.description}</Text>
+
+          {/* Clickable Location Badge for Direct Maps Navigation */}
+          {item.location_url && (
+            <TouchableOpacity 
+              style={styles.locationButton}
+              onPress={() => openMapLocation(item.location_url, item.location_name || item.title)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="navigate" size={14} color="#0d9488" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {item.location_name || 'Start Navigation'}
+              </Text>
+              <Ionicons name="open-outline" size={12} color="#0d9488" />
+            </TouchableOpacity>
+          )}
         </View>
       </CardContainer>
     );
@@ -142,14 +161,34 @@ export default function HomeTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
-  feedList: { paddingHorizontal: 16, paddingBottom: 110 },
+  feedList: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 110,
+  },
   postImage: { width: '100%', height: 200, borderRadius: 12, marginBottom: 12 },
   postTextContainer: { paddingHorizontal: 4 },
   postTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 8 },
   timeText: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
   postDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdfa',
+    borderColor: '#ccfbf1',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  locationText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0d9488',
+  },
   emptyText: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16 },
 });
