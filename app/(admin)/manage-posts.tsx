@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { File } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
@@ -37,8 +36,6 @@ interface Post {
   location_url?: string | null;
 }
 
-const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
 const DEFAULT_REGION: Region = {
   latitude: 31.5204,
   longitude: 74.3587,
@@ -55,16 +52,9 @@ export default function ManagePosts() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [isWeeklyActivity, setIsWeeklyActivity] = useState(false);
-  
-  const [day, setDay] = useState('');
-  const [time, setTime] = useState('');
+
   const [locationName, setLocationName] = useState('');
   const [locationUrl, setLocationUrl] = useState('');
-  const [dateValue, setDateValue] = useState<Date>(new Date());
-  
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Map States
   const [showMapModal, setShowMapModal] = useState(false);
@@ -84,33 +74,6 @@ export default function ManagePosts() {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (!result.canceled) setImageUri(result.assets[0].uri);
   }
-
-  const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setDateValue(selectedDate);
-      const dayIndex = selectedDate.getDay();
-      setDay(DAYS_OF_WEEK[dayIndex]);
-      setTimeout(() => setShowTimePicker(true), 100);
-    }
-  };
-
-  const onTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
-    setShowTimePicker(false);
-    if (selectedTime) {
-      const updatedDate = new Date(dateValue);
-      updatedDate.setHours(selectedTime.getHours());
-      updatedDate.setMinutes(selectedTime.getMinutes());
-      setDateValue(updatedDate);
-
-      const formattedTime = selectedTime.toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
-      });
-      setTime(formattedTime);
-    }
-  };
 
   // Search location on map using Nominatim Geocoder
   const handleMapSearch = async () => {
@@ -168,9 +131,6 @@ export default function ManagePosts() {
 
   async function handleCreate() {
     if (!title.trim()) return Alert.alert("Error", "Title is required");
-    if (isWeeklyActivity && (!day || !time)) {
-      return Alert.alert("Error", "Please select a scheduled Date and Time.");
-    }
 
     setLoading(true);
     let imagePath = null;
@@ -199,25 +159,20 @@ export default function ManagePosts() {
     }
 
     const { error } = await supabase.from('posts').insert({
-      title: title.trim(), 
-      description: description.trim(), 
+      title: title.trim(),
+      description: description.trim(),
       image_url: imagePath,
-      is_weekly_activity: isWeeklyActivity,
-      day: isWeeklyActivity ? day : null,
-      time: isWeeklyActivity ? time : null,
+      is_weekly_activity: false,
       location_name: locationName.trim() || null,
       location_url: locationUrl.trim() || null,
     });
-    
+
     if (error) {
       Alert.alert("Error", error.message);
     } else {
-      setTitle(''); 
-      setDescription(''); 
-      setImageUri(null); 
-      setIsWeeklyActivity(false); 
-      setDay(''); 
-      setTime('');
+      setTitle('');
+      setDescription('');
+      setImageUri(null);
       setLocationName('');
       setLocationUrl('');
       setSelectedCoords(null);
@@ -271,28 +226,6 @@ export default function ManagePosts() {
                   {locationUrl ? "Location Selected ✓ (Tap to Change)" : "📍 Search & Select Location on Map"}
                 </Text>
               </TouchableOpacity>
-
-              <TouchableOpacity style={styles.checkboxContainer} onPress={() => setIsWeeklyActivity(!isWeeklyActivity)}>
-                <View style={[styles.checkbox, isWeeklyActivity && styles.checkboxActive]}>
-                  {isWeeklyActivity && <Ionicons name="checkmark" size={18} color="#fff" />}
-                </View>
-                <Text style={styles.checkboxLabel}>Mark as Weekly Activity</Text>
-              </TouchableOpacity>
-
-              {isWeeklyActivity && (
-                <View style={styles.activityScheduleSection}>
-                  <Text style={styles.sectionTitle}>Activity Schedule Info</Text>
-                  <TouchableOpacity style={styles.pickerTriggerButton} onPress={() => setShowDatePicker(true)}>
-                    <Ionicons name="calendar-outline" size={20} color="#0d9488" />
-                    <Text style={styles.pickerTriggerText}>
-                      {day && time ? `${day} at ${time}` : "Pick Date & Time"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {showDatePicker && <DateTimePicker value={dateValue} mode="date" display="default" onChange={onDateChange} />}
-                  {showTimePicker && <DateTimePicker value={dateValue} mode="time" display="default" onChange={onTimeChange} />}
-                </View>
-              )}
 
               <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
                 <Text style={{ color: imageUri ? '#0d9488' : '#94a3b8', fontWeight: '600' }}>
@@ -424,14 +357,6 @@ const styles = StyleSheet.create({
   },
   mapTriggerText: { fontSize: 15, fontWeight: '700', color: '#0d9488' },
   imagePicker: { padding: 15, borderWidth: 2, borderColor: '#ccfbf1', borderStyle: 'dashed', borderRadius: 10, alignItems: 'center', backgroundColor: '#fff' },
-  checkboxContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  checkbox: { width: 24, height: 24, borderWidth: 2, borderColor: '#0d9488', borderRadius: 6, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  checkboxActive: { backgroundColor: '#0d9488' },
-  checkboxLabel: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  activityScheduleSection: { backgroundColor: '#f8fafc', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', gap: 8 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 4 },
-  pickerTriggerButton: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10, padding: 12 },
-  pickerTriggerText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
   dividerRow: { marginTop: 16, borderBottomWidth: 1.5, borderColor: '#e2e8f0', paddingBottom: 6 },
   dividerText: { fontSize: 14, fontWeight: '700', color: '#475569' },
   postImage: { width: '100%', height: 150, borderRadius: 8, marginBottom: 10 },

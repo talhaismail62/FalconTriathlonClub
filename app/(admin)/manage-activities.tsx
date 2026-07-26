@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,15 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import MapView, { Marker, Region } from 'react-native-maps';
 import { supabase } from '@/lib/supabase';
-import { CardContainer } from '@/components/UI';
+import { CardContainer, GradientButton } from '@/components/UI';
 import { openMapLocation } from '@/lib/location';
 
 interface Activity {
@@ -32,6 +34,13 @@ interface Activity {
 }
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const DEFAULT_REGION: Region = {
+  latitude: 31.5204,
+  longitude: 74.3587,
+  latitudeDelta: 0.02,
+  longitudeDelta: 0.02,
+};
 
 // Matches the format used by manage-posts.tsx so both screens store time the same way.
 function formatTime(date: Date): string {
@@ -57,6 +66,8 @@ function parseTimeToDate(value: string | null): Date {
 }
 
 export default function ManageActivities() {
+  const mapRef = useRef<MapView | null>(null);
+
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,6 +83,12 @@ export default function ManageActivities() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [locationName, setLocationName] = useState('');
   const [locationUrl, setLocationUrl] = useState('');
+
+  // Map States
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedCoords, setSelectedCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const onTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
     setShowTimePicker(false);
@@ -97,6 +114,60 @@ export default function ManageActivities() {
     setLoading(false);
   }
 
+  // Search location on map using Nominatim Geocoder
+  const handleMapSearch = async () => {
+    if (!searchQuery.trim()) return;
+    Keyboard.dismiss();
+    setIsSearching(true);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`,
+        { headers: { 'User-Agent': 'ExpoClubApp/1.0' } }
+      );
+      const results = await response.json();
+
+      if (results && results.length > 0) {
+        const firstResult = results[0];
+        const lat = parseFloat(firstResult.lat);
+        const lon = parseFloat(firstResult.lon);
+
+        const newCoords = { latitude: lat, longitude: lon };
+        setSelectedCoords(newCoords);
+
+        // Auto move map camera to searched spot
+        mapRef.current?.animateToRegion({
+          latitude: lat,
+          longitude: lon,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+
+        if (!locationName.trim()) {
+          const shortDisplayName = firstResult.display_name.split(',')[0];
+          setLocationName(shortDisplayName);
+        }
+      } else {
+        Alert.alert("Location Not Found", "Try typing a more specific place name or city.");
+      }
+    } catch (err) {
+      Alert.alert("Search Error", "Could not fetch place coordinates.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const confirmMapSelection = () => {
+    if (selectedCoords) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${selectedCoords.latitude},${selectedCoords.longitude}`;
+      setLocationUrl(url);
+      if (!locationName.trim()) {
+        setLocationName('Pinned Location');
+      }
+    }
+    setShowMapModal(false);
+  };
+
   function openCreate() {
     setEditingId(null);
     setSelectedDay('Monday');
@@ -106,6 +177,8 @@ export default function ManageActivities() {
     setTimeValue(new Date());
     setLocationName('');
     setLocationUrl('');
+    setSelectedCoords(null);
+    setSearchQuery('');
     setModalVisible(true);
   }
 
@@ -119,6 +192,8 @@ export default function ManageActivities() {
     setTimeValue(parseTimeToDate(item.time));
     setLocationName(item.location_name || '');
     setLocationUrl(item.location_url || '');
+    setSelectedCoords(null);
+    setSearchQuery('');
     setModalVisible(true);
   }
 
@@ -311,15 +386,13 @@ export default function ManageActivities() {
                 onChangeText={setLocationName}
               />
 
-              <Text style={styles.inputLabel}>Google Maps Link or Coords (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Paste Google Maps URL or coordinates (lat,lng)"
-                placeholderTextColor="#94a3b8"
-                value={locationUrl}
-                onChangeText={setLocationUrl}
-                autoCapitalize="none"
-              />
+              {/* Map Trigger */}
+              <TouchableOpacity style={styles.mapTriggerButton} onPress={() => setShowMapModal(true)}>
+                <Ionicons name="map-outline" size={20} color="#0d9488" />
+                <Text style={styles.mapTriggerText}>
+                  {locationUrl ? "Location Selected ✓ (Tap to Change)" : "📍 Search & Select Location on Map"}
+                </Text>
+              </TouchableOpacity>
 
               <Text style={styles.inputLabel}>Description</Text>
               <TextInput
@@ -348,6 +421,56 @@ export default function ManageActivities() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* MAP PICKER & SEARCH MODAL */}
+      <Modal visible={showMapModal} animationType="slide">
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+          <View style={styles.mapModalHeader}>
+            <Text style={styles.mapModalTitle}>Select Location</Text>
+            <TouchableOpacity onPress={() => setShowMapModal(false)}>
+              <Ionicons name="close" size={26} color="#0f172a" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Bar on top of map */}
+          <View style={styles.searchOverlay}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search place, area or landmark..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleMapSearch}
+              returnKeyType="search"
+            />
+            <TouchableOpacity style={styles.searchButton} onPress={handleMapSearch}>
+              {isSearching ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Ionicons name="search" size={18} color="#ffffff" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <MapView
+            ref={mapRef}
+            style={styles.mapView}
+            initialRegion={DEFAULT_REGION}
+            onPress={(e) => setSelectedCoords(e.nativeEvent.coordinate)}
+          >
+            {selectedCoords && (
+              <Marker coordinate={selectedCoords} title={locationName || "Selected Venue"} />
+            )}
+          </MapView>
+
+          <View style={styles.mapModalFooter}>
+            <GradientButton
+              label={selectedCoords ? "Confirm Selected Location" : "Tap Map or Search Place"}
+              onPress={confirmMapSelection}
+            />
+          </View>
+        </SafeAreaView>
       </Modal>
     </LinearGradient>
   );
@@ -502,6 +625,18 @@ const styles = StyleSheet.create({
   },
   timePickerText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
   timePickerPlaceholder: { color: '#94a3b8', fontWeight: '400' },
+  mapTriggerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1.5,
+    borderColor: '#ccfbf1',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+  },
+  mapTriggerText: { fontSize: 15, fontWeight: '700', color: '#0d9488' },
   submitButton: {
     backgroundColor: '#0d9488',
     borderRadius: 12,
@@ -512,4 +647,44 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
   disabledButton: { opacity: 0.5 },
+  mapModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  mapModalTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  searchOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#0f172a',
+  },
+  searchButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#0d9488',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapView: { flex: 1, width: '100%' },
+  mapModalFooter: { padding: 16, borderTopWidth: 1, borderColor: '#e2e8f0' },
 });
