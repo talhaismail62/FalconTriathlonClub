@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GradientHeader from '@/components/GradientHeader';
+import { TAB_BAR_HEIGHT, tabBarBottomOffset } from '@/components/tabBarLayout';
 
 export default function AppLayout() {
   const { session, loading, isRecovering } = useAuth();
@@ -18,7 +19,8 @@ export default function AppLayout() {
   }
 
   // Float above the system nav bar, but keep it compact (Defect #13).
-  const barBottom = Math.max(insets.bottom, 8) + 6;
+  // Screens that need to clear the bar import the same helpers.
+  const barBottom = tabBarBottomOffset(insets);
 
   return (
     <Tabs
@@ -42,11 +44,15 @@ export default function AppLayout() {
         tabBarItemStyle: {
           paddingVertical: 6,
         },
+        // Drop the bar out of the way while typing so it can never sit on top
+        // of a focused input (Sporty's chat bar in particular).
+        tabBarHideOnKeyboard: true,
+
         tabBarStyle: {
           position: 'absolute',
           bottom: barBottom,
           marginHorizontal: 20, // Forces the bar to be narrower with space on left/right
-          height: 60,
+          height: TAB_BAR_HEIGHT,
           paddingBottom: 0,
           paddingTop: 0,
           borderRadius: 25,

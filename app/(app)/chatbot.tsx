@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useHeaderHeight } from '@react-navigation/elements';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { tabBarClearance } from '@/components/tabBarLayout';
 
 // ---------------------------------------------------------------------------
 // Gemini API config
@@ -39,16 +39,44 @@ const WELCOME_MESSAGE: Message = {
   content: "Hey! I'm Sporty AI 🏃 Ask me anything about training, workouts, recovery, or nutrition for sport.",
 };
 
+// Tracks only whether the keyboard is open, not its height — the height differs
+// between platforms (Android excludes the navigation bar) and is unreliable to
+// position against. KeyboardAvoidingView does the actual lifting.
+function useKeyboardShown(): boolean {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    // The Will* events fire before the animation on iOS, so the layout settles
+    // in step with the keyboard instead of snapping after it.
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => setShown(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setShown(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  return shown;
+}
+
 export default function ChatbotTab() {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  // Measured at runtime rather than hardcoded, so this adapts to any screen
-  // size, notch, gesture bar, or font scale.
-  const tabBarHeight = useBottomTabBarHeight();
-  const headerHeight = useHeaderHeight();
+  // Derived from the safe-area inset at runtime, so it adapts to any screen
+  // size, notch, or gesture bar.
+  const insets = useSafeAreaInsets();
+
+  // While the keyboard is up the tab bar hides itself (tabBarHideOnKeyboard),
+  // so only the keyboard needs clearing; otherwise clear the floating bar.
+  const keyboardShown = useKeyboardShown();
+  const bottomClearance = keyboardShown ? 0 : tabBarClearance(insets);
 
   function scrollToEnd() {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
@@ -118,12 +146,11 @@ export default function ChatbotTab() {
       {/* edges={[]} because the header and tab bar already account for insets;
           KeyboardAvoidingView handles the rest. */}
       <SafeAreaView style={styles.safeArea} edges={[]}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          // Offset by the header so the lifted content isn't pushed too far up.
-          keyboardVerticalOffset={headerHeight}
-        >
+        {/* 'padding' on both platforms: under Expo's edge-to-edge default the
+            window no longer resizes when the keyboard opens, so 'height' has
+            nothing to shrink on Android. The view already starts below the
+            header, so no vertical offset is needed. */}
+        <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={0}>
           <Text style={styles.heading}>Sporty AI</Text>
 
           <ScrollView
@@ -142,7 +169,7 @@ export default function ChatbotTab() {
 
           {/* Sits directly above the keyboard when open, above the floating
               tab bar when closed. */}
-          <View style={[styles.inputBar, { marginBottom: tabBarHeight }]}>
+          <View style={[styles.inputBar, { marginBottom: bottomClearance }]}>
             <TextInput
               style={styles.input}
               value={input}
