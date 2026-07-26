@@ -5,14 +5,16 @@ import {
   Text, 
   StyleSheet, 
   FlatList, 
-  ActivityIndicator, 
-  RefreshControl
+  ActivityIndicator,
+  RefreshControl,
+  TouchableOpacity
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
 import { Ionicons } from '@expo/vector-icons';
+import { openMapLocation } from '@/lib/location';
 
 interface Activity {
   id: string;
@@ -20,6 +22,8 @@ interface Activity {
   title: string;
   description: string;
   time: string; 
+  location_name: string | null;
+  location_url: string | null;
   image_url: string | null;
   created_at: string; 
 }
@@ -100,6 +104,20 @@ export default function ActivitiesTab() {
         </View>
 
         <Text style={styles.activityDescription}>{item.description}</Text>
+
+        {item.location_url && (
+          <TouchableOpacity 
+            style={styles.locationButton}
+            onPress={() => openMapLocation(item.location_url, item.location_name || item.title)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="location" size={15} color="#0d9488" />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {item.location_name || 'View Location'}
+            </Text>
+            <Ionicons name="open-outline" size={13} color="#0d9488" />
+          </TouchableOpacity>
+        )}
       </CardContainer>
     );
   }
@@ -149,5 +167,23 @@ const styles = StyleSheet.create({
   creationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 8 },
   creationText: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
   activityDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdfa',
+    borderColor: '#ccfbf1',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  locationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0d9488',
+  },
   emptyText: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16, fontWeight: '600' },
 });

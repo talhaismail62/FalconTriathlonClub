@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -7,18 +7,23 @@ import {
   FlatList, 
   Image, 
   TouchableOpacity, 
-  Alert 
+  Alert,
+  Modal,
+  ActivityIndicator,
+  Keyboard
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import MapView, { Marker, Region } from 'react-native-maps';
 import { File } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { CardContainer, GradientButton } from '@/components/UI';
+import { openMapLocation } from '@/lib/location';
 
 interface Post { 
   id: string; 
@@ -28,12 +33,23 @@ interface Post {
   is_weekly_activity: boolean; 
   day?: string;
   time?: string;
+  location_name?: string | null;
+  location_url?: string | null;
 }
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+const DEFAULT_REGION: Region = {
+  latitude: 31.5204,
+  longitude: 74.3587,
+  latitudeDelta: 0.02,
+  longitudeDelta: 0.02,
+};
+
 export default function ManagePosts() {
   const { session } = useAuth();
+  const mapRef = useRef<MapView | null>(null);
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
@@ -43,10 +59,18 @@ export default function ManagePosts() {
   
   const [day, setDay] = useState('');
   const [time, setTime] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const [locationUrl, setLocationUrl] = useState('');
   const [dateValue, setDateValue] = useState<Date>(new Date());
   
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  // Map States
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedCoords, setSelectedCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => { fetchPosts(); }, []);
 
@@ -88,6 +112,60 @@ export default function ManagePosts() {
     }
   };
 
+  // Search location on map using Nominatim Geocoder
+  const handleMapSearch = async () => {
+    if (!searchQuery.trim()) return;
+    Keyboard.dismiss();
+    setIsSearching(true);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`,
+        { headers: { 'User-Agent': 'ExpoClubApp/1.0' } }
+      );
+      const results = await response.json();
+
+      if (results && results.length > 0) {
+        const firstResult = results[0];
+        const lat = parseFloat(firstResult.lat);
+        const lon = parseFloat(firstResult.lon);
+
+        const newCoords = { latitude: lat, longitude: lon };
+        setSelectedCoords(newCoords);
+
+        // Auto move map camera to searched spot
+        mapRef.current?.animateToRegion({
+          latitude: lat,
+          longitude: lon,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+
+        if (!locationName.trim()) {
+          const shortDisplayName = firstResult.display_name.split(',')[0];
+          setLocationName(shortDisplayName);
+        }
+      } else {
+        Alert.alert("Location Not Found", "Try typing a more specific place name or city.");
+      }
+    } catch (err) {
+      Alert.alert("Search Error", "Could not fetch place coordinates.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const confirmMapSelection = () => {
+    if (selectedCoords) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${selectedCoords.latitude},${selectedCoords.longitude}`;
+      setLocationUrl(url);
+      if (!locationName.trim()) {
+        setLocationName('Pinned Location');
+      }
+    }
+    setShowMapModal(false);
+  };
+
   async function handleCreate() {
     if (!title.trim()) return Alert.alert("Error", "Title is required");
     if (isWeeklyActivity && (!day || !time)) {
@@ -121,18 +199,29 @@ export default function ManagePosts() {
     }
 
     const { error } = await supabase.from('posts').insert({
-      title, 
-      description, 
+      title: title.trim(), 
+      description: description.trim(), 
       image_url: imagePath,
       is_weekly_activity: isWeeklyActivity,
       day: isWeeklyActivity ? day : null,
-      time: isWeeklyActivity ? time : null
+      time: isWeeklyActivity ? time : null,
+      location_name: locationName.trim() || null,
+      location_url: locationUrl.trim() || null,
     });
     
     if (error) {
       Alert.alert("Error", error.message);
     } else {
-      setTitle(''); setDescription(''); setImageUri(null); setIsWeeklyActivity(false); setDay(''); setTime('');
+      setTitle(''); 
+      setDescription(''); 
+      setImageUri(null); 
+      setIsWeeklyActivity(false); 
+      setDay(''); 
+      setTime('');
+      setLocationName('');
+      setLocationUrl('');
+      setSelectedCoords(null);
+      setSearchQuery('');
       fetchPosts();
     }
     setLoading(false);
@@ -167,6 +256,22 @@ export default function ManagePosts() {
               <TextInput style={styles.input} placeholder="Post Title" placeholderTextColor="#94a3b8" value={title} onChangeText={setTitle} />
               <TextInput style={[styles.input, { height: 80 }]} placeholder="Description" placeholderTextColor="#94a3b8" multiline value={description} onChangeText={setDescription} />
               
+              <TextInput 
+                style={styles.input} 
+                placeholder="Location Name (e.g. Liberty Park)" 
+                placeholderTextColor="#94a3b8" 
+                value={locationName} 
+                onChangeText={setLocationName} 
+              />
+
+              {/* Map Trigger */}
+              <TouchableOpacity style={styles.mapTriggerButton} onPress={() => setShowMapModal(true)}>
+                <Ionicons name="map-outline" size={20} color="#0d9488" />
+                <Text style={styles.mapTriggerText}>
+                  {locationUrl ? "Location Selected ✓ (Tap to Change)" : "📍 Search & Select Location on Map"}
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity style={styles.checkboxContainer} onPress={() => setIsWeeklyActivity(!isWeeklyActivity)}>
                 <View style={[styles.checkbox, isWeeklyActivity && styles.checkboxActive]}>
                   {isWeeklyActivity && <Ionicons name="checkmark" size={18} color="#fff" />}
@@ -223,12 +328,77 @@ export default function ManagePosts() {
                 )}
               </View>
 
+              {item.location_url && (
+                <TouchableOpacity 
+                  style={styles.locationButton}
+                  onPress={() => openMapLocation(item.location_url, item.location_name || item.title)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="navigate" size={14} color="#0d9488" />
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {item.location_name || 'Start Navigation'}
+                  </Text>
+                  <Ionicons name="open-outline" size={12} color="#0d9488" />
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
                 <Text style={styles.deleteText}>Delete</Text>
               </TouchableOpacity>
             </CardContainer>
           )}
         />
+
+        {/* MAP PICKER & SEARCH MODAL */}
+        <Modal visible={showMapModal} animationType="slide">
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff' }}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Location</Text>
+              <TouchableOpacity onPress={() => setShowMapModal(false)}>
+                <Ionicons name="close" size={26} color="#0f172a" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Bar on top of map */}
+            <View style={styles.searchOverlay}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search place, area or landmark..."
+                placeholderTextColor="#94a3b8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleMapSearch}
+                returnKeyType="search"
+              />
+              <TouchableOpacity style={styles.searchButton} onPress={handleMapSearch}>
+                {isSearching ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Ionicons name="search" size={18} color="#ffffff" />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <MapView 
+              ref={mapRef}
+              style={styles.mapView}
+              initialRegion={DEFAULT_REGION}
+              onPress={(e) => setSelectedCoords(e.nativeEvent.coordinate)}
+            >
+              {selectedCoords && (
+                <Marker coordinate={selectedCoords} title={locationName || "Selected Venue"} />
+              )}
+            </MapView>
+
+            <View style={styles.modalFooter}>
+              <GradientButton 
+                label={selectedCoords ? "Confirm Selected Location" : "Tap Map or Search Place"} 
+                onPress={confirmMapSelection} 
+              />
+            </View>
+          </SafeAreaView>
+        </Modal>
+
       </SafeAreaView>
     </LinearGradient>
   );
@@ -242,6 +412,17 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: '#64748b', fontWeight: '500', marginTop: 2 },
   form: { paddingVertical: 8, gap: 12 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: '#0f172a' },
+  mapTriggerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1.5,
+    borderColor: '#ccfbf1',
+    borderRadius: 10,
+    padding: 14,
+  },
+  mapTriggerText: { fontSize: 15, fontWeight: '700', color: '#0d9488' },
   imagePicker: { padding: 15, borderWidth: 2, borderColor: '#ccfbf1', borderStyle: 'dashed', borderRadius: 10, alignItems: 'center', backgroundColor: '#fff' },
   checkboxContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   checkbox: { width: 24, height: 24, borderWidth: 2, borderColor: '#0d9488', borderRadius: 6, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
@@ -258,6 +439,64 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 4 },
   postTypeBadge: { fontSize: 12, fontWeight: '600', color: '#0d9488', backgroundColor: '#f0fdfa', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, overflow: 'hidden' },
   timeBadge: { fontSize: 12, fontWeight: '600', color: '#64748b', backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, overflow: 'hidden' },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdfa',
+    borderColor: '#ccfbf1',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  locationText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0d9488',
+  },
   deleteBtn: { backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start', marginTop: 10 },
-  deleteText: { color: '#ef4444', fontWeight: '700', fontSize: 12 }
+  deleteText: { color: '#ef4444', fontWeight: '700', fontSize: 12 },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  searchOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#0f172a'
+  },
+  searchButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#0d9488',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  mapView: { flex: 1, width: '100%' },
+  modalFooter: { padding: 16, borderTopWidth: 1, borderColor: '#e2e8f0' },
 });

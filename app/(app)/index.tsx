@@ -20,12 +20,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/context/AuthContext';
+import { openMapLocation } from '@/lib/location';
 
 interface Post {
   id: string;
   title: string;
   description: string;
   image_url: string | null;
+  location_name: string | null;
+  location_url: string | null;
   created_at: string;
 }
 
@@ -34,6 +37,8 @@ interface Activity {
   day: string;
   title: string;
   time: string;
+  location_name: string | null;
+  location_url: string | null;
 }
 
 interface JerseySizeEntry {
@@ -156,10 +161,10 @@ export default function HomeTab() {
     const [postsResult, activitiesResult] = await Promise.all([
       supabase
         .from('posts')
-        .select('id, title, description, image_url, created_at')
+        .select('id, title, description, image_url, location_name, location_url, created_at')
         .eq('is_weekly_activity', false)
         .order('created_at', { ascending: false }),
-      supabase.from('weekly_activities').select('id, day, title, time'),
+      supabase.from('weekly_activities').select('id, day, title, time, location_name, location_url'),
     ]);
 
     if (!postsResult.error && postsResult.data) {
@@ -276,6 +281,20 @@ export default function HomeTab() {
         <Text style={styles.postDescription} numberOfLines={3}>
           {item.description}
         </Text>
+
+        {item.location_url && (
+          <TouchableOpacity
+            style={styles.locationButton}
+            onPress={() => openMapLocation(item.location_url, item.location_name || item.title)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="navigate" size={14} color="#0d9488" />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {item.location_name || 'Start Navigation'}
+            </Text>
+            <Ionicons name="open-outline" size={12} color="#0d9488" />
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -310,6 +329,21 @@ export default function HomeTab() {
             </View>
           ) : null}
         </View>
+
+        {/* Clickable Location Badge for Direct Maps Navigation */}
+        {item.location_url && (
+          <TouchableOpacity
+            style={styles.locationButton}
+            onPress={() => openMapLocation(item.location_url, item.location_name || item.title)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="navigate" size={14} color="#0d9488" />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {item.location_name || 'Start Navigation'}
+            </Text>
+            <Ionicons name="open-outline" size={12} color="#0d9488" />
+          </TouchableOpacity>
+        )}
 
         {!isLast && <View style={styles.rowDivider} />}
       </View>
@@ -638,6 +672,24 @@ const styles = StyleSheet.create({
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 8 },
   timeText: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
   postDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdfa',
+    borderColor: '#ccfbf1',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  locationText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0d9488',
+  },
 
   // Activities
   activityRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },

@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
+import { openMapLocation } from '@/lib/location';
 
 interface Activity {
   id: string;
@@ -26,6 +27,8 @@ interface Activity {
   title: string;
   description: string;
   time: string | null;
+  location_name: string | null;
+  location_url: string | null;
 }
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -67,6 +70,8 @@ export default function ManageActivities() {
   const [time, setTime] = useState('');
   const [timeValue, setTimeValue] = useState<Date>(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [locationName, setLocationName] = useState('');
+  const [locationUrl, setLocationUrl] = useState('');
 
   const onTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
     setShowTimePicker(false);
@@ -99,6 +104,8 @@ export default function ManageActivities() {
     setDescription('');
     setTime('');
     setTimeValue(new Date());
+    setLocationName('');
+    setLocationUrl('');
     setModalVisible(true);
   }
 
@@ -110,6 +117,8 @@ export default function ManageActivities() {
     setTime(item.time || '');
     // Open the clock on the saved time rather than "now" when editing.
     setTimeValue(parseTimeToDate(item.time));
+    setLocationName(item.location_name || '');
+    setLocationUrl(item.location_url || '');
     setModalVisible(true);
   }
 
@@ -130,6 +139,8 @@ export default function ManageActivities() {
       title: title.trim(),
       description: description.trim(),
       time: time.trim(),
+      location_name: locationName.trim() || null,
+      location_url: locationUrl.trim() || null,
     };
 
     try {
@@ -172,6 +183,19 @@ export default function ManageActivities() {
         </View>
         <Text style={styles.activityTitle}>{item.title}</Text>
         <Text style={styles.activityDescription}>{item.description}</Text>
+
+        {item.location_url && (
+          <TouchableOpacity
+            style={styles.locationBadge}
+            onPress={() => openMapLocation(item.location_url, item.location_name || item.title)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.locationBadgeText}>
+              📍 {item.location_name || 'View Location'} ↗
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.editBtn} onPress={() => openEdit(item)}>
             <Text style={styles.editText}>Edit</Text>
@@ -278,6 +302,25 @@ export default function ManageActivities() {
                 />
               )}
 
+              <Text style={styles.inputLabel}>Location Name (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., Liberty Roundabout / Main Track"
+                placeholderTextColor="#94a3b8"
+                value={locationName}
+                onChangeText={setLocationName}
+              />
+
+              <Text style={styles.inputLabel}>Google Maps Link or Coords (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Paste Google Maps URL or coordinates (lat,lng)"
+                placeholderTextColor="#94a3b8"
+                value={locationUrl}
+                onChangeText={setLocationUrl}
+                autoCapitalize="none"
+              />
+
               <Text style={styles.inputLabel}>Description</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
@@ -348,6 +391,21 @@ const styles = StyleSheet.create({
   timeText: { fontSize: 12, fontWeight: '600', color: '#64748b' },
   activityTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 6 },
   activityDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
+  locationBadge: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#f0fdfa',
+    borderColor: '#ccfbf1',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  locationBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0d9488',
+  },
   actionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 12 },
   editBtn: {
     backgroundColor: '#ccfbf1',
