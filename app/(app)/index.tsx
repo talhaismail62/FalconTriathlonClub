@@ -75,10 +75,18 @@ interface Bill {
   participants: BillParticipant[];
 }
 
+interface Rsvp {
+  activity_id: string;
+  email: string;
+  name: string | null;
+  status: 'Going' | 'Not Going' | 'Maybe';
+}
+
 const INSTAGRAM_URL = 'https://www.instagram.com/falcontriathlonclub/';
 const FACEBOOK_URL = 'https://www.facebook.com/falcontriathlonclub';
 
 const JERSEY_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+const RSVP_OPTIONS: Rsvp['status'][] = ['Going', 'Not Going', 'Maybe'];
 
 const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -175,6 +183,10 @@ export default function HomeTab() {
   const [memberSearch, setMemberSearch] = useState('');
   const [allMembers, setAllMembers] = useState<Member[]>([]);
   const [selectedParticipants, setSelectedParticipants] = useState<Map<string, { name: string | null; guestCount: number }>>(new Map());
+
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
+  const [rsvpsByActivity, setRsvpsByActivity] = useState<Record<string, Rsvp[]>>({});
+  const [isSavingRsvp, setIsSavingRsvp] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -509,6 +521,56 @@ export default function HomeTab() {
     ]);
   }
 
+  async function toggleActivityExpand(activityId: string) {
+    if (expandedActivityId === activityId) {
+      setExpandedActivityId(null);
+      return;
+    }
+    setExpandedActivityId(activityId);
+
+    const { data, error } = await supabase
+      .from('activity_rsvps')
+      .select('activity_id, email, name, status')
+      .eq('activity_id', activityId);
+
+    if (!error && data) {
+      setRsvpsByActivity((prev) => ({ ...prev, [activityId]: data as Rsvp[] }));
+    }
+  }
+
+  async function handleActivityVote(activityId: string, status: Rsvp['status']) {
+    if (!email) return;
+    setIsSavingRsvp(true);
+
+    const { data: profile } = await supabase
+      .from('myusers')
+      .select('name')
+      .eq('email', email.toLowerCase())
+      .single();
+
+    const { error } = await supabase.from('activity_rsvps').upsert(
+      {
+        activity_id: activityId,
+        email: email.toLowerCase(),
+        name: profile?.name || null,
+        status,
+      },
+      { onConflict: 'activity_id,email' }
+    );
+
+    setIsSavingRsvp(false);
+    if (error) return;
+
+    const { data } = await supabase
+      .from('activity_rsvps')
+      .select('activity_id, email, name, status')
+      .eq('activity_id', activityId);
+
+    if (data) {
+      setRsvpsByActivity((prev) => ({ ...prev, [activityId]: data as Rsvp[] }));
+    }
+  }
+
   function renderPost(item: Post) {
     const imageUrl = item.image_url
       ? supabase.storage.from('post_images').getPublicUrl(item.image_url).data.publicUrl
@@ -551,33 +613,38 @@ export default function HomeTab() {
   function renderActivity(item: Activity, isLast: boolean) {
     const countdown = formatCountdown(item.day);
     const dayLabel = (item.day || '').slice(0, 3).toUpperCase();
+    const isExpanded = expandedActivityId === item.id;
+    const rsvps = rsvpsByActivity[item.id] || [];
+    const myVote = rsvps.find((r) => r.email.toLowerCase() === email.toLowerCase())?.status;
 
     return (
       <View key={item.id}>
-        <View style={styles.activityRow}>
-          {/* Day tile stands in for the calendar tile — activities recur weekly */}
-          <View style={styles.dayTile}>
-            <Text style={styles.dayTileText}>{dayLabel || '—'}</Text>
-          </View>
+        <TouchableOpacity activeOpacity={0.8} onPress={() => toggleActivityExpand(item.id)}>
+          <View style={styles.activityRow}>
+            {/* Day tile stands in for the calendar tile — activities recur weekly */}
+            <View style={styles.dayTile}>
+              <Text style={styles.dayTileText}>{dayLabel || '—'}</Text>
+            </View>
 
-          <View style={styles.activityBody}>
-            <Text style={styles.activityTitle} numberOfLines={1}>
-              {item.title}
-            </Text>
-            {item.time ? (
-              <View style={styles.activityMetaRow}>
-                <Ionicons name="time-outline" size={13} color="#94a3b8" />
-                <Text style={styles.activityMetaText}>{item.time}</Text>
+            <View style={styles.activityBody}>
+              <Text style={styles.activityTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              {item.time ? (
+                <View style={styles.activityMetaRow}>
+                  <Ionicons name="time-outline" size={13} color="#94a3b8" />
+                  <Text style={styles.activityMetaText}>{item.time}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {countdown ? (
+              <View style={styles.countdownPill}>
+                <Text style={styles.countdownText}>{countdown}</Text>
               </View>
             ) : null}
           </View>
-
-          {countdown ? (
-            <View style={styles.countdownPill}>
-              <Text style={styles.countdownText}>{countdown}</Text>
-            </View>
-          ) : null}
-        </View>
+        </TouchableOpacity>
 
         {/* Clickable Location Badge for Direct Maps Navigation */}
         {item.location_url && (
@@ -592,6 +659,53 @@ export default function HomeTab() {
             </Text>
             <Ionicons name="open-outline" size={12} color="#0d9488" />
           </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={styles.expandToggle}
+          onPress={() => toggleActivityExpand(item.id)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.expandToggleText}>
+            {isExpanded ? 'Hide RSVPs' : `RSVP${rsvps.length > 0 ? ` · ${rsvps.length}` : ''}`}
+          </Text>
+          <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#0d9488" />
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.rsvpSection}>
+            <View style={styles.rsvpOptionRow}>
+              {RSVP_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[styles.rsvpChip, myVote === option && styles.rsvpChipActive]}
+                  onPress={() => handleActivityVote(item.id, option)}
+                  disabled={isSavingRsvp}
+                >
+                  <Text style={[styles.rsvpChipText, myVote === option && styles.rsvpChipTextActive]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {rsvps.length === 0 ? (
+              <Text style={styles.rsvpEmptyText}>No one has responded yet.</Text>
+            ) : (
+              RSVP_OPTIONS.map((status) => {
+                const votersForStatus = rsvps.filter((r) => r.status === status);
+                if (votersForStatus.length === 0) return null;
+                return (
+                  <View key={status} style={styles.rsvpGroup}>
+                    <Text style={styles.rsvpGroupTitle}>{status} ({votersForStatus.length})</Text>
+                    <Text style={styles.rsvpGroupNames}>
+                      {votersForStatus.map((r) => r.name || r.email).join(', ')}
+                    </Text>
+                  </View>
+                );
+              })
+            )}
+          </View>
         )}
 
         {!isLast && <View style={styles.rowDivider} />}
@@ -1223,6 +1337,33 @@ const styles = StyleSheet.create({
   },
   countdownText: { fontSize: 12, fontWeight: '700', color: '#0f766e' },
   rowDivider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 10 },
+  expandToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 10,
+    paddingTop: 10,
+  },
+  expandToggleText: { fontSize: 13, fontWeight: '700', color: '#0d9488' },
+  rsvpSection: { marginTop: 6 },
+  rsvpOptionRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  rsvpChip: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+  },
+  rsvpChipActive: { backgroundColor: '#0d9488', borderColor: '#0d9488' },
+  rsvpChipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  rsvpChipTextActive: { color: '#ffffff' },
+  rsvpEmptyText: { fontSize: 13, color: '#94a3b8', fontStyle: 'italic' },
+  rsvpGroup: { marginBottom: 8 },
+  rsvpGroupTitle: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginBottom: 2 },
+  rsvpGroupNames: { fontSize: 13, color: '#64748b', lineHeight: 18 },
 
   // Empty states
   emptyCard: {
