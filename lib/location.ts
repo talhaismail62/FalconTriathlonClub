@@ -1,34 +1,24 @@
-import { Linking, Platform } from 'react-native';
+import { Linking, Platform, Alert } from 'react-native';
 
-export function openMapLocation(locationUrl: string | null, title?: string) {
-  if (!locationUrl) return;
-
-  // Extract lat,lng from Google Maps URLs or direct coordinates
-  const coordsMatch = locationUrl.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-
-  if (coordsMatch) {
-    const lat = coordsMatch[1];
-    const lng = coordsMatch[2];
-
-    if (Platform.OS === 'android') {
-      // Android: Launches Google Maps in direct Navigation Mode
-      const navUrl = `google.navigation:q=${lat},${lng}`;
-      Linking.canOpenURL(navUrl).then((supported) => {
-        if (supported) {
-          Linking.openURL(navUrl);
-        } else {
-          Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
-        }
-      });
-      return;
-    } else {
-      // iOS: Launches Apple Maps / Google Maps directly in driving navigation mode
-      const iosUrl = `http://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`;
-      Linking.openURL(iosUrl);
-      return;
-    }
+/**
+ * Opens a map URL in the native Google Maps / Apple Maps app,
+ * or falls back to standard web browser navigation.
+ */
+export async function openMapLocation(url: string | null | undefined, title?: string) {
+  if (!url) {
+    Alert.alert('No Location', 'No map location link is available for this event.');
+    return;
   }
 
-  // Fallback if URL is a plain text web link
-  Linking.openURL(locationUrl);
+  try {
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert('Cannot Open Maps', 'Unable to open the map link on this device.');
+    }
+  } catch (error) {
+    console.error('Error opening location:', error);
+    Alert.alert('Error', 'Could not open the map location.');
+  }
 }

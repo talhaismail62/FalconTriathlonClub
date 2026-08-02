@@ -17,7 +17,7 @@ export default function AdminDashboard() {
       end={{ x: 0.8, y: 0.8 }} 
       style={styles.container}
     >
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 5 }]} edges={['top']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Admin Portal</Text>
@@ -45,7 +45,7 @@ export default function AdminDashboard() {
             </CardContainer>
           </TouchableOpacity>
 
-          {/* Button to Verify Payments */}
+          {/* Button to Manage Activities */}
           <TouchableOpacity 
             activeOpacity={0.8}
             onPress={() => router.push('/(admin)/verify-payments')}
@@ -79,7 +79,8 @@ const styles = StyleSheet.create({
   },
   header: { 
     paddingHorizontal: 16, 
-    paddingBottom: 20 
+    paddingBottom: 20,
+    paddingTop: 0,
   },
   headerTitle: { 
     fontSize: 28, 

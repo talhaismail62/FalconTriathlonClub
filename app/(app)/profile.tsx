@@ -5,7 +5,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
@@ -23,10 +23,21 @@ import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
+const GENDER_OPTIONS = ['Male', 'Female'];
+const SPORT_OPTIONS = ['Cycling', 'Running', 'Swimming'];
+
+function parseDisciplines(value: string): string[] {
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export default function Profile() {
   const router = useRouter();
   const { session } = useAuth();
   const email = session?.user?.email ?? '';
+  const insets = useSafeAreaInsets();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,6 +56,15 @@ export default function Profile() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const selectedDisciplines = parseDisciplines(sportDiscipline);
+
+  function toggleDiscipline(option: string) {
+    const next = selectedDisciplines.includes(option)
+      ? selectedDisciplines.filter((d) => d !== option)
+      : [...selectedDisciplines, option];
+    setSportDiscipline(SPORT_OPTIONS.filter((o) => next.includes(o)).join(', '));
+  }
 
   useEffect(() => {
     loadProfile();
@@ -65,15 +85,14 @@ export default function Profile() {
       setSportDiscipline(data.sport_discipline || '');
       setBio(data.bio || '');
       setPhoneNumber(data.phone_number || '');
-      setEmergencyContact(data.emergency_contact || '');
+      setEmergencyContact((data.emergency_contact || '').replace(/[^0-9]/g, ''));
       setStravaHandle(data.strava_handle || '');
       setIsAdmin(data.is_admin || false);
 
-      // Generate a 10-year Signed URL for the private bucket
       if (data.pfp) {
         const { data: urlData } = await supabase.storage
           .from('profile_pics')
-          .createSignedUrl(data.pfp, 315360000); // 10 years in seconds
+          .createSignedUrl(data.pfp, 315360000); 
         if (urlData?.signedUrl) setAvatarUri(urlData.signedUrl);
       } else {
         setAvatarUri(null);
@@ -136,7 +155,6 @@ export default function Profile() {
 
         avatarPathForDb = fileName;
 
-        // Generate Signed URL for immediate local UI update
         const { data: urlData } = await supabase.storage
           .from('profile_pics')
           .createSignedUrl(fileName, 315360000);
@@ -209,7 +227,7 @@ export default function Profile() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardContainer}
@@ -242,8 +260,6 @@ export default function Profile() {
 
               <Text style={styles.emailBadge}>{email}</Text>
 
-
-              {/* Find this section in your Profile.tsx and replace it: */}
               {isAdmin && (
                 <TouchableOpacity 
                   style={styles.adminButton} 
@@ -280,7 +296,14 @@ export default function Profile() {
                   <TextInput style={styles.input} value={phoneNumber} onChangeText={setPhoneNumber} placeholder="Phone number" placeholderTextColor="#94a3b8" keyboardType="phone-pad" />
 
                   <Text style={styles.label}>Emergency Contact</Text>
-                  <TextInput style={styles.input} value={emergencyContact} onChangeText={setEmergencyContact} placeholder="Name & Phone" placeholderTextColor="#94a3b8" />
+                  <TextInput
+                    style={styles.input}
+                    value={emergencyContact}
+                    onChangeText={(text) => setEmergencyContact(text.replace(/[^0-9]/g, ''))}
+                    placeholder="Emergency contact number"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="number-pad"
+                  />
 
                   <Text style={styles.label}>Strava Handle</Text>
                   <TextInput style={styles.input} value={stravaHandle} onChangeText={setStravaHandle} placeholder="Strava profile link/handle" placeholderTextColor="#94a3b8" autoCapitalize="none" />
@@ -351,7 +374,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   keyboardContainer: { flex: 1 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 50, paddingBottom: 10 },
+  headerRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 24, 
+    paddingTop: 0,
+    paddingBottom: 10 
+  },
   screenTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
   editPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ccfbf1', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 4 },
   editPillText: { color: '#0d9488', fontWeight: '700', fontSize: 13 },

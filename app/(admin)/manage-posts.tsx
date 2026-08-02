@@ -10,7 +10,8 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  Keyboard
+  Keyboard,
+  Platform
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,8 +19,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import MapView, { Marker, Region } from 'react-native-maps';
-import { File } from 'expo-file-system';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { CardContainer, GradientButton } from '@/components/UI';
@@ -37,8 +36,6 @@ interface Post {
   location_url?: string | null;
 }
 
-const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
 const DEFAULT_REGION: Region = {
   latitude: 31.5204,
   longitude: 74.3587,
@@ -49,6 +46,7 @@ const DEFAULT_REGION: Region = {
 export default function ManagePosts() {
   const { session } = useAuth();
   const mapRef = useRef<MapView | null>(null);
+  const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,12 +59,12 @@ export default function ManagePosts() {
   const [time, setTime] = useState('');
   const [locationName, setLocationName] = useState('');
   const [locationUrl, setLocationUrl] = useState('');
-  const [dateValue, setDateValue] = useState<Date>(new Date());
-  
+
+  // Date/Time picker states
+  const [dateValue, setDateValue] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // Map States
   const [showMapModal, setShowMapModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -86,33 +84,29 @@ export default function ManagePosts() {
   }
 
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
-    setShowDatePicker(false);
+    setShowDatePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setDateValue(selectedDate);
-      const dayIndex = selectedDate.getDay();
-      setDay(DAYS_OF_WEEK[dayIndex]);
-      setTimeout(() => setShowTimePicker(true), 100);
+      const dayName = selectedDate.toLocaleDateString('en-US', { weekday: 'long' });
+      setDay(dayName);
+      // Trigger time picker immediately after picking date
+      setShowTimePicker(true);
     }
   };
 
   const onTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
-    setShowTimePicker(false);
+    setShowTimePicker(Platform.OS === 'ios');
     if (selectedTime) {
-      const updatedDate = new Date(dateValue);
-      updatedDate.setHours(selectedTime.getHours());
-      updatedDate.setMinutes(selectedTime.getMinutes());
-      setDateValue(updatedDate);
-
-      const formattedTime = selectedTime.toLocaleTimeString([], { 
-        hour: '2-digit', 
+      setDateValue(selectedTime);
+      const formattedTime = selectedTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
         minute: '2-digit',
-        hour12: true 
+        hour12: true,
       });
       setTime(formattedTime);
     }
   };
 
-  // Search location on map using Nominatim Geocoder
   const handleMapSearch = async () => {
     if (!searchQuery.trim()) return;
     Keyboard.dismiss();
@@ -133,7 +127,6 @@ export default function ManagePosts() {
         const newCoords = { latitude: lat, longitude: lon };
         setSelectedCoords(newCoords);
 
-        // Auto move map camera to searched spot
         mapRef.current?.animateToRegion({
           latitude: lat,
           longitude: lon,
@@ -179,10 +172,18 @@ export default function ManagePosts() {
       try {
         const ext = (imageUri.split('.').pop()?.split('?')[0] || 'jpg').toLowerCase();
         const path = `posts/${Date.now()}.${ext}`;
-        const { error } = await supabase.storage.from('post_images').upload(path, blob);
+
+        // Fetch image standard blob for upload
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+
+        const { error } = await supabase.storage.from('post_images').upload(path, blob, {
+          contentType: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
+        });
+
         if (!error) imagePath = path;
       } catch (err) {
-        console.error(err);
+        console.error("Image upload error:", err);
       }
     }
 
@@ -218,17 +219,20 @@ export default function ManagePosts() {
   async function handleDelete(id: string) {
     Alert.alert("Delete Post", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: async () => {
-        await supabase.from('posts').delete().eq('id', id);
-        fetchPosts();
-      }}
+      { 
+        text: "Delete", 
+        style: "destructive", 
+        onPress: async () => {
+          await supabase.from('posts').delete().eq('id', id);
+          fetchPosts();
+        }
+      }
     ]);
   }
 
   return (
     <LinearGradient colors={['#ffffff', '#0d9488']} start={{ x: 0.2, y: 0.2 }} end={{ x: 0.8, y: 0.8 }} style={styles.container}>
-      {/* Safe Area Layout Wrapper to provide top spacing safely across all devices */}
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 5 }]} edges={['top']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         
         {/* Consistent Black Top Heading */}
         <View style={styles.header}>
@@ -349,7 +353,6 @@ export default function ManagePosts() {
               </TouchableOpacity>
             </View>
 
-            {/* Search Bar on top of map */}
             <View style={styles.searchOverlay}>
               <TextInput
                 style={styles.searchInput}
@@ -397,8 +400,8 @@ export default function ManagePosts() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 12 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' }, // Deep black title
+  header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 0 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
   headerSubtitle: { fontSize: 14, color: '#64748b', fontWeight: '500', marginTop: 2 },
   form: { paddingVertical: 8, gap: 12 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: '#0f172a' },

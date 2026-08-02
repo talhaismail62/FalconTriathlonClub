@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,11 @@ import {
   Modal,
   Pressable,
   FlatList,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const API_URL = (process.env.EXPO_PUBLIC_LEADERBOARD_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
 
@@ -55,6 +54,20 @@ function normalise(raw: any): Board {
   };
 }
 
+function describePeriod(scope: Scope, month: number, year: number): string {
+  return scope === 'monthly' ? `${MONTHS[month - 1]} ${year}` : String(year);
+}
+
+function describeAge(savedAt: number | null): string {
+  if (!savedAt) return '';
+  const mins = Math.floor((Date.now() - savedAt) / 60000);
+  if (mins < 1) return 'from moments ago';
+  if (mins < 60) return `from ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `from ${hours}h ago`;
+  return `from ${Math.floor(hours / 24)}d ago`;
+}
+
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
 
@@ -74,6 +87,17 @@ export default function LeaderboardTab() {
 
   const [picker, setPicker] = useState<null | 'month' | 'year'>(null);
 
+  const [showingCached, setShowingCached] = useState(false);
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [justUpdated, setJustUpdated] = useState(false);
+
+  const [confirmedEmpty, setConfirmedEmpty] = useState(false);
+
+  const showingCachedRef = useRef(false);
+  useEffect(() => {
+    showingCachedRef.current = showingCached;
+  }, [showingCached]);
+
   const getCacheKey = useCallback(() => {
     return `@leaderboard_cache_${scope}_${month}_${year}`;
   }, [scope, month, year]);
@@ -89,10 +113,27 @@ export default function LeaderboardTab() {
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const json = await res.json();
       const normalised = normalise(json);
+      
+      const hadStaleData = showingCachedRef.current;
+      
       setBoard(normalised);
-      await AsyncStorage.setItem(getCacheKey(), JSON.stringify(normalised));
+      setShowingCached(false);
+      setCachedAt(Date.now());
+
+      setConfirmedEmpty(
+        normalised.male.length === 0 && normalised.female.length === 0
+      );
+
+      if (hadStaleData) {
+        setJustUpdated(true);
+        setTimeout(() => setJustUpdated(false), 3000);
+      }
+
+      await AsyncStorage.setItem(
+        getCacheKey(),
+        JSON.stringify({ board: normalised, savedAt: Date.now() })
+      );
     } catch (e: any) {
-      setBoard(EMPTY_BOARD);
       setError(
         e?.message === 'Network request failed'
           ? `Could not reach the leaderboard server at ${API_URL}. Is it running?`
@@ -104,13 +145,21 @@ export default function LeaderboardTab() {
   useEffect(() => {
     let active = true;
     
-    // Load from cache first for instant rendering
+    setShowingCached(false);
+    setCachedAt(null);
+    setConfirmedEmpty(false);
+
     AsyncStorage.getItem(getCacheKey()).then((cached) => {
-      if (cached && active) {
-        try {
-          setBoard(JSON.parse(cached));
-        } catch {}
-      }
+      if (!cached || !active) return;
+      try {
+        const parsed = JSON.parse(cached);
+        const cachedBoard: Board = parsed?.board ?? parsed;
+        if (!cachedBoard?.male && !cachedBoard?.female) return;
+
+        setBoard(cachedBoard);
+        setCachedAt(parsed?.savedAt ?? null);
+        setShowingCached(true);
+      } catch {}
     });
 
     setLoading(true);
@@ -122,8 +171,18 @@ export default function LeaderboardTab() {
 
   async function onRefresh() {
     setRefreshing(true);
+    showingCachedRef.current = true;
     await fetchBoard();
     setRefreshing(false);
+  }
+
+  const isCurrentPeriod =
+    year === now.getFullYear() &&
+    (scope === 'yearly' || month === now.getMonth() + 1);
+
+  function goToCurrentPeriod() {
+    setYear(now.getFullYear());
+    setMonth(now.getMonth() + 1);
   }
 
   const list = board[gender];
@@ -135,7 +194,7 @@ export default function LeaderboardTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 16 }]} edges={['bottom']}>
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
@@ -192,6 +251,34 @@ export default function LeaderboardTab() {
             ))}
           </View>
 
+          {showingCached && !error && (
+            <View style={styles.staleBanner}>
+              <ActivityIndicator size="small" color="#b45309" />
+              <Text style={styles.staleText}>
+                Showing saved standings {describeAge(cachedAt)} — updating in the background…
+              </Text>
+            </View>
+          )}
+
+          {justUpdated && (
+            <View style={styles.freshBanner}>
+              <Ionicons name="checkmark-circle" size={18} color="#0f766e" />
+              <Text style={styles.freshText}>Leaderboard updated</Text>
+            </View>
+          )}
+
+          {error && list.length > 0 && (
+            <View style={styles.offlineBanner}>
+              <Ionicons name="cloud-offline-outline" size={18} color="#b91c1c" />
+              <Text style={styles.offlineText}>
+                Couldn&apos;t refresh — showing saved standings {describeAge(cachedAt)}.
+              </Text>
+              <TouchableOpacity onPress={onRefresh}>
+                <Text style={styles.offlineRetry}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {loading && list.length === 0 ? (
             <ActivityIndicator color="#0d9488" size="large" style={{ marginTop: 40 }} />
           ) : error ? (
@@ -201,6 +288,23 @@ export default function LeaderboardTab() {
               <TouchableOpacity onPress={onRefresh} style={styles.retryBtn}>
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
+            </View>
+          ) : confirmedEmpty ? (
+            <View style={styles.messageCard}>
+              <Ionicons name="calendar-clear-outline" size={28} color="#94a3b8" />
+              <Text style={styles.noDataTitle}>
+                No data for {describePeriod(scope, month, year)}
+              </Text>
+              <Text style={styles.emptyText}>
+                No activities were recorded for this {scope === 'monthly' ? 'month' : 'year'}.
+              </Text>
+              {!isCurrentPeriod && (
+                <TouchableOpacity onPress={goToCurrentPeriod} style={styles.retryBtn}>
+                  <Text style={styles.retryText}>
+                    Go to {scope === 'monthly' ? 'this month' : 'this year'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : list.length === 0 ? (
             <View style={styles.messageCard}>
@@ -309,7 +413,7 @@ function SportStat({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingBottom: 110 },
+  content: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 110 }, 
   heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
 
   segment: {
@@ -359,6 +463,50 @@ const styles = StyleSheet.create({
   modalOptionTextActive: { color: '#0d9488', fontWeight: '800' },
 
   messageCard: { backgroundColor: '#ffffff', borderRadius: 16, padding: 24, alignItems: 'center', marginTop: 20, gap: 10 },
+  noDataTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
+
+  staleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  staleText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: '#b45309', lineHeight: 17 },
+
+  freshBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  freshText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: '#0f766e' },
+
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  offlineText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: '#b91c1c', lineHeight: 17 },
+  offlineRetry: { fontSize: 12.5, fontWeight: '800', color: '#0d9488' },
   errorText: { color: '#ef4444', fontWeight: '600', textAlign: 'center' },
   emptyText: { color: '#64748b', fontWeight: '600', textAlign: 'center' },
   retryBtn: { marginTop: 6, backgroundColor: '#0d9488', paddingVertical: 8, paddingHorizontal: 20, borderRadius: 10 },
