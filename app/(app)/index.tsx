@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
+import { File, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
@@ -69,6 +70,8 @@ interface BillParticipant {
 interface Bill {
   id: string;
   created_by: string;
+  name: string | null;
+  description: string | null;
   amount: number;
   bill_date: string;
   created_at: string;
@@ -93,6 +96,81 @@ const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Sat
 // How many sections of each kind the home page previews before "View all".
 const POST_PREVIEW_COUNT = 3;
 const ACTIVITY_PREVIEW_COUNT = 3;
+
+// Totals the quantities ordered per size, so the admin view can show how many of
+// each size to order. Sizes with no orders stay in the result as 0 — a size that
+// nobody picked is useful information when you're placing the order.
+function tallyJerseySizes(
+  entries: JerseySizeEntry[],
+  kind: 'running' | 'cycling'
+): { size: string; quantity: number }[] {
+  const sizeField = kind === 'running' ? 'running_size' : 'cycling_size';
+  const quantityField = kind === 'running' ? 'running_quantity' : 'cycling_quantity';
+
+  return JERSEY_SIZES.map((size) => ({
+    size,
+    quantity: entries
+      .filter((entry) => entry[sizeField] === size)
+      .reduce((sum, entry) => sum + (entry[quantityField] || 0), 0),
+  }));
+}
+
+// Escapes a value for CSV: wrap in quotes and double any embedded quotes, so
+// names containing commas or quotes don't break the column layout.
+function toCsvCell(value: string | number | null): string {
+  const text = value === null || value === undefined ? '' : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function buildJerseyCsv(entries: JerseySizeEntry[]): string {
+  const runningTally = tallyJerseySizes(entries, 'running');
+  const cyclingTally = tallyJerseySizes(entries, 'cycling');
+
+  const rows: string[] = [];
+
+  rows.push(
+    ['Name', 'Email', 'Cycling Size', 'Cycling Quantity', 'Running Size', 'Running Quantity']
+      .map(toCsvCell)
+      .join(',')
+  );
+
+  entries.forEach((entry) => {
+    rows.push(
+      [
+        entry.name || '',
+        entry.email,
+        entry.cycling_size,
+        entry.cycling_quantity,
+        entry.running_size,
+        entry.running_quantity,
+      ]
+        .map(toCsvCell)
+        .join(',')
+    );
+  });
+
+  // Aggregated totals live below the per-member rows, separated by a blank line
+  // so spreadsheet apps keep the member table intact when sorting/filtering.
+  rows.push('');
+  rows.push(['Aggregated Totals'].map(toCsvCell).join(','));
+  rows.push(['Jersey Type', 'Size', 'Total Quantity'].map(toCsvCell).join(','));
+
+  cyclingTally.forEach(({ size, quantity }) => {
+    rows.push(['Cycling', size, quantity].map(toCsvCell).join(','));
+  });
+  runningTally.forEach(({ size, quantity }) => {
+    rows.push(['Running', size, quantity].map(toCsvCell).join(','));
+  });
+
+  const cyclingTotal = cyclingTally.reduce((sum, item) => sum + item.quantity, 0);
+  const runningTotal = runningTally.reduce((sum, item) => sum + item.quantity, 0);
+
+  rows.push(['Cycling', 'All sizes', cyclingTotal].map(toCsvCell).join(','));
+  rows.push(['Running', 'All sizes', runningTotal].map(toCsvCell).join(','));
+  rows.push(['Members submitted', '', entries.length].map(toCsvCell).join(','));
+
+  return rows.join('\n');
+}
 
 // Simple, lightweight helper to turn database timestamps into friendly display text
 function formatPostTime(dateString: string): string {
@@ -169,6 +247,12 @@ export default function HomeTab() {
   const [jerseyListModalVisible, setJerseyListModalVisible] = useState(false);
   const [isLoadingJerseyList, setIsLoadingJerseyList] = useState(false);
   const [jerseyEntries, setJerseyEntries] = useState<JerseySizeEntry[]>([]);
+  const [isExportingJerseyCsv, setIsExportingJerseyCsv] = useState(false);
+
+  const runningTally = useMemo(() => tallyJerseySizes(jerseyEntries, 'running'), [jerseyEntries]);
+  const cyclingTally = useMemo(() => tallyJerseySizes(jerseyEntries, 'cycling'), [jerseyEntries]);
+  const runningTotal = runningTally.reduce((sum, item) => sum + item.quantity, 0);
+  const cyclingTotal = cyclingTally.reduce((sum, item) => sum + item.quantity, 0);
 
   const [bills, setBills] = useState<Bill[]>([]);
   const [billsModalVisible, setBillsModalVisible] = useState(false);
@@ -177,6 +261,8 @@ export default function HomeTab() {
   const [createBillModalVisible, setCreateBillModalVisible] = useState(false);
   const [isSavingBill, setIsSavingBill] = useState(false);
   const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  const [billName, setBillName] = useState('');
+  const [billDescription, setBillDescription] = useState('');
   const [billAmount, setBillAmount] = useState('');
   const [billDate, setBillDate] = useState<Date>(new Date());
   const [showBillDatePicker, setShowBillDatePicker] = useState(false);
@@ -312,10 +398,57 @@ export default function HomeTab() {
     setIsLoadingJerseyList(false);
   }
 
+  async function handleExportJerseyCsv() {
+    if (jerseyEntries.length === 0) {
+      Alert.alert('Nothing to Export', 'No jersey size submissions yet.');
+      return;
+    }
+
+    setIsExportingJerseyCsv(true);
+    try {
+      // expo-sharing is a native module, so it's loaded on demand rather than at
+      // import time — that keeps this screen usable on older builds that were
+      // compiled before the dependency was added.
+      let Sharing: typeof import('expo-sharing');
+      try {
+        Sharing = require('expo-sharing');
+      } catch {
+        Alert.alert(
+          'Update Required',
+          'CSV export needs a newer version of the app. Please install the latest build.'
+        );
+        return;
+      }
+
+      const csv = buildJerseyCsv(jerseyEntries);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const file = new File(Paths.cache, `jersey-sizes-${stamp}.csv`);
+
+      if (file.exists) file.delete();
+      file.create();
+      file.write(csv);
+
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('Not Available', 'Sharing is not available on this device.');
+        return;
+      }
+
+      await Sharing.shareAsync(file.uri, {
+        mimeType: 'text/csv',
+        dialogTitle: 'Export Jersey Sizes',
+        UTI: 'public.comma-separated-values-text',
+      });
+    } catch (err: any) {
+      Alert.alert('Export Failed', err.message || 'Could not create the CSV file.');
+    } finally {
+      setIsExportingJerseyCsv(false);
+    }
+  }
+
   async function fetchBills() {
     const { data, error } = await supabase
       .from('bills')
-      .select('id, created_by, amount, bill_date, created_at, bill_participants(id, bill_id, email, name, guest_count, has_paid)')
+      .select('id, created_by, name, description, amount, bill_date, created_at, bill_participants(id, bill_id, email, name, guest_count, has_paid)')
       .order('bill_date', { ascending: false });
 
     if (!error && data) {
@@ -323,6 +456,8 @@ export default function HomeTab() {
         data.map((b: any) => ({
           id: b.id,
           created_by: b.created_by,
+          name: b.name ?? null,
+          description: b.description ?? null,
           amount: b.amount,
           bill_date: b.bill_date,
           created_at: b.created_at,
@@ -355,6 +490,8 @@ export default function HomeTab() {
 
   async function openCreateBillModal() {
     setEditingBillId(null);
+    setBillName('');
+    setBillDescription('');
     setBillAmount('');
     setBillDate(new Date());
     setMemberSearch('');
@@ -374,6 +511,8 @@ export default function HomeTab() {
 
   async function openEditBillModal(bill: Bill) {
     setEditingBillId(bill.id);
+    setBillName(bill.name || '');
+    setBillDescription(bill.description || '');
     setBillAmount(String(bill.amount));
     setBillDate(new Date(bill.bill_date));
     setMemberSearch('');
@@ -420,6 +559,13 @@ export default function HomeTab() {
   };
 
   async function handleSaveBill() {
+    const trimmedName = billName.trim();
+    const trimmedDescription = billDescription.trim();
+
+    if (!trimmedName) {
+      Alert.alert('Validation Error', 'Please enter a name for the bill.');
+      return;
+    }
     const parsedAmount = parseFloat(billAmount);
     if (!parsedAmount || parsedAmount <= 0) {
       Alert.alert('Validation Error', 'Please enter a valid bill amount.');
@@ -437,7 +583,12 @@ export default function HomeTab() {
       if (editingBillId) {
         const { error } = await supabase
           .from('bills')
-          .update({ amount: parsedAmount, bill_date: billDate.toISOString().slice(0, 10) })
+          .update({
+            name: trimmedName,
+            description: trimmedDescription || null,
+            amount: parsedAmount,
+            bill_date: billDate.toISOString().slice(0, 10),
+          })
           .eq('id', editingBillId);
         if (error) throw error;
 
@@ -480,7 +631,13 @@ export default function HomeTab() {
       } else {
         const { data, error } = await supabase
           .from('bills')
-          .insert({ created_by: email.toLowerCase(), amount: parsedAmount, bill_date: billDate.toISOString().slice(0, 10) })
+          .insert({
+            created_by: email.toLowerCase(),
+            name: trimmedName,
+            description: trimmedDescription || null,
+            amount: parsedAmount,
+            bill_date: billDate.toISOString().slice(0, 10),
+          })
           .select('id')
           .single();
         if (error) throw error;
@@ -723,10 +880,22 @@ export default function HomeTab() {
       <View key={bill.id} style={styles.billCard}>
         <View style={styles.billHeader}>
           <View style={styles.flex1}>
-            <Text style={styles.billAmount}>Rs {bill.amount.toFixed(2)}</Text>
+            {/* Named bills lead with the name; older unnamed bills keep the
+                amount as the headline so they still read sensibly. */}
+            {bill.name ? (
+              <>
+                <Text style={styles.billName}>{bill.name}</Text>
+                <Text style={styles.billAmountWithName}>Rs {bill.amount.toFixed(2)}</Text>
+              </>
+            ) : (
+              <Text style={styles.billAmount}>Rs {bill.amount.toFixed(2)}</Text>
+            )}
             <Text style={styles.billDate}>
               {new Date(bill.bill_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </Text>
+            {bill.description ? (
+              <Text style={styles.billDescription}>{bill.description}</Text>
+            ) : null}
           </View>
           <View style={styles.billProgressPill}>
             <Text style={styles.billProgressText}>
@@ -1045,25 +1214,99 @@ export default function HomeTab() {
                     <Text style={styles.emptyText}>No submissions yet.</Text>
                   </View>
                 ) : (
-                  jerseyEntries.map((entry) => (
-                    <View key={entry.email} style={styles.jerseyEntryCard}>
-                      <Text style={styles.jerseyEntryName}>{entry.name || entry.email}</Text>
-                      {entry.name && <Text style={styles.jerseyEntryEmail}>{entry.email}</Text>}
-
-                      <View style={styles.jerseyEntryRow}>
-                        <Text style={styles.jerseyEntryLabel}>Running</Text>
-                        <Text style={styles.jerseyEntryValue}>
-                          {entry.running_size} × {entry.running_quantity}
-                        </Text>
+                  <>
+                    <View style={styles.tallyCard}>
+                      <Text style={styles.tallySectionTitle}>Cycling Jerseys</Text>
+                      <View style={styles.tallyGrid}>
+                        {cyclingTally.map(({ size, quantity }) => (
+                          <View
+                            key={`cycling-${size}`}
+                            style={[styles.tallyChip, quantity === 0 && styles.tallyChipEmpty]}
+                          >
+                            <Text
+                              style={[styles.tallyChipSize, quantity === 0 && styles.tallyChipTextEmpty]}
+                            >
+                              {size}
+                            </Text>
+                            <Text
+                              style={[styles.tallyChipCount, quantity === 0 && styles.tallyChipTextEmpty]}
+                            >
+                              {quantity}
+                            </Text>
+                          </View>
+                        ))}
                       </View>
-                      <View style={styles.jerseyEntryRow}>
-                        <Text style={styles.jerseyEntryLabel}>Cycling</Text>
-                        <Text style={styles.jerseyEntryValue}>
-                          {entry.cycling_size} × {entry.cycling_quantity}
+
+                      <Text style={[styles.tallySectionTitle, styles.tallySectionSpacing]}>
+                        Running Jerseys
+                      </Text>
+                      <View style={styles.tallyGrid}>
+                        {runningTally.map(({ size, quantity }) => (
+                          <View
+                            key={`running-${size}`}
+                            style={[styles.tallyChip, quantity === 0 && styles.tallyChipEmpty]}
+                          >
+                            <Text
+                              style={[styles.tallyChipSize, quantity === 0 && styles.tallyChipTextEmpty]}
+                            >
+                              {size}
+                            </Text>
+                            <Text
+                              style={[styles.tallyChipCount, quantity === 0 && styles.tallyChipTextEmpty]}
+                            >
+                              {quantity}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      <View style={styles.tallyTotalsRow}>
+                        <Text style={styles.tallyTotalsText}>
+                          {cyclingTotal} cycling · {runningTotal} running
+                        </Text>
+                        <Text style={styles.tallyTotalsText}>
+                          {jerseyEntries.length}{' '}
+                          {jerseyEntries.length === 1 ? 'member' : 'members'}
                         </Text>
                       </View>
                     </View>
-                  ))
+
+                    <TouchableOpacity
+                      style={[styles.csvButton, isExportingJerseyCsv && styles.disabledButton]}
+                      onPress={handleExportJerseyCsv}
+                      disabled={isExportingJerseyCsv}
+                      activeOpacity={0.85}
+                    >
+                      {isExportingJerseyCsv ? (
+                        <ActivityIndicator color="#ffffff" />
+                      ) : (
+                        <>
+                          <Ionicons name="download-outline" size={18} color="#ffffff" />
+                          <Text style={styles.csvButtonText}>Download CSV</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    {jerseyEntries.map((entry) => (
+                      <View key={entry.email} style={styles.jerseyEntryCard}>
+                        <Text style={styles.jerseyEntryName}>{entry.name || entry.email}</Text>
+                        {entry.name && <Text style={styles.jerseyEntryEmail}>{entry.email}</Text>}
+
+                        <View style={styles.jerseyEntryRow}>
+                          <Text style={styles.jerseyEntryLabel}>Running</Text>
+                          <Text style={styles.jerseyEntryValue}>
+                            {entry.running_size} × {entry.running_quantity}
+                          </Text>
+                        </View>
+                        <View style={styles.jerseyEntryRow}>
+                          <Text style={styles.jerseyEntryLabel}>Cycling</Text>
+                          <Text style={styles.jerseyEntryValue}>
+                            {entry.cycling_size} × {entry.cycling_quantity}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </>
                 )}
               </ScrollView>
             )}
@@ -1150,6 +1393,26 @@ export default function HomeTab() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., Dinner at Kolachi"
+                placeholderTextColor="#94a3b8"
+                value={billName}
+                onChangeText={setBillName}
+              />
+
+              <Text style={styles.inputLabel}>Description (optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Add any notes about this bill..."
+                placeholderTextColor="#94a3b8"
+                value={billDescription}
+                onChangeText={setBillDescription}
+                multiline
+                numberOfLines={3}
+              />
+
               <Text style={styles.inputLabel}>Amount</Text>
               <TextInput
                 style={styles.input}
@@ -1422,6 +1685,61 @@ const styles = StyleSheet.create({
   jerseyEntryLabel: { fontSize: 13, fontWeight: '600', color: '#64748b' },
   jerseyEntryValue: { fontSize: 13, fontWeight: '700', color: '#0d9488' },
 
+  // Jersey size totals (admin summary above the per-member list)
+  tallyCard: {
+    backgroundColor: '#f0fdfa',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+  },
+  tallySectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f766e',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  tallySectionSpacing: { marginTop: 14 },
+  tallyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tallyChip: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 58,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+  },
+  tallyChipEmpty: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
+  tallyChipSize: { fontSize: 11, fontWeight: '700', color: '#0f766e' },
+  tallyChipCount: { fontSize: 18, fontWeight: '800', color: '#0d9488', marginTop: 2 },
+  tallyChipTextEmpty: { color: '#cbd5e1' },
+  tallyTotalsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#ccfbf1',
+  },
+  tallyTotalsText: { fontSize: 12, fontWeight: '700', color: '#0f766e' },
+
+  csvButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0d9488',
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginBottom: 14,
+  },
+  csvButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+
   // Jersey modal
   modalOverlay: {
     flex: 1,
@@ -1504,6 +1822,7 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     marginBottom: 16,
   },
+  textArea: { height: 90, textAlignVertical: 'top' },
   timePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1558,7 +1877,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 10,
   },
+  billName: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
   billAmount: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  billAmountWithName: { fontSize: 15, fontWeight: '700', color: '#0d9488', marginTop: 2 },
+  billDescription: { fontSize: 12, color: '#64748b', marginTop: 4, lineHeight: 17 },
   billDate: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
   billProgressPill: {
     backgroundColor: '#ccfbf1',

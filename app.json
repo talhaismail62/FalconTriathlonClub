@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Falcon Triathlon Club",
-    "slug": "falcontriathlonclub",
+    "slug": "ftc-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "falcontriathlonclub",
@@ -17,7 +17,8 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.talha62ismailsteam.ftcapp"
     },
     "web": {
       "bundler": "metro",
@@ -31,6 +32,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9dc4271a-acd9-43fb-8270-dce455ba4b4b"
+      }
+    },
+    "owner": "talha62ismails-team"
   }
 }

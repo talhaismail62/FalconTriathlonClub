@@ -14,12 +14,9 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
+import { signInWithGoogle } from '@/lib/googleAuth';
 import { LinearGradient } from 'expo-linear-gradient';
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function Signup() {
   const router = useRouter();
@@ -93,47 +90,17 @@ export default function Signup() {
   }
 
   // ── Google OAuth (Defect #17) ──
+  // Flow lives in lib/googleAuth so login and signup can't drift apart. The
+  // myusers row is now created by a database trigger on auth.users, so this
+  // path no longer needs to provision it manually.
   async function handleGoogleSignIn() {
     setLoading(true);
-    try {
-      const redirectTo = Linking.createURL('(app)');
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo },
-      });
+    const result = await signInWithGoogle();
+    setLoading(false);
 
-      if (error) throw error;
-
-      if (data?.url) {
-        // 1. Open the browser session
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-        
-        // 2. If successful, extract the tokens from the redirect URL
-        if (result.type === 'success') {
-          // The tokens are stored in the hash fragment (e.g., #access_token=...&refresh_token=...)
-          const urlParams = result.url.split('#')[1] || '';
-          const searchParams = new URLSearchParams(urlParams);
-          
-          const access_token = searchParams.get('access_token');
-          const refresh_token = searchParams.get('refresh_token');
-
-          // 3. Manually pass the tokens to Supabase
-          if (access_token && refresh_token) {
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token,
-              refresh_token,
-            });
-            
-            if (sessionError) throw sessionError;
-            
-            // AuthContext's onAuthStateChange will catch this and redirect automatically!
-          }
-        }
-      }
-    } catch (e: any) {
-      Alert.alert('Google sign-in failed', e?.message ?? 'Unknown error');
-    } finally {
-      setLoading(false);
+    // On success AuthContext redirects; a cancel is silent. Only real errors alert.
+    if (!result.ok && result.reason === 'error') {
+      Alert.alert('Google sign-in failed', result.message ?? 'Unknown error');
     }
   }
 

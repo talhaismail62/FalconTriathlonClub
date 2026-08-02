@@ -21,6 +21,16 @@ app = FastAPI()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Sport-type buckets — uses Strava's newer `sport_type` field (not the
+# deprecated `type` field), so we can distinguish e.g. TrailRun/VirtualRun
+# from plain Run, and VirtualRide/GravelRide/MountainBikeRide from plain Ride.
+# ─────────────────────────────────────────────────────────────────────────────
+RUN_TYPES  = {"Run", "TrailRun", "VirtualRun", "Hike"}
+RIDE_TYPES = {"Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EMountainBikeRide", "EBikeRide"}
+SWIM_TYPES = {"Swim"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # NOTE: The SCORES table in Supabase must have these columns (add via migration):
 #
 #   score         FLOAT
@@ -105,13 +115,13 @@ async def MleaderBoard(before: int, after: int):
         counts    = [0, 0, 0]         # Run, Ride, Swim  (activity count)
 
         for d in data:
-            activity_type = d.get("type", "")
+            activity_type = d.get("sport_type", "")
 
-            if activity_type == "Run":
+            if activity_type in RUN_TYPES:
                 idx = 0
-            elif activity_type == "Ride":
+            elif activity_type in RIDE_TYPES:
                 idx = 1
-            elif activity_type == "Swim":
+            elif activity_type in SWIM_TYPES:
                 idx = 2
             else:
                 continue

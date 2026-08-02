@@ -9,12 +9,23 @@
 create table if not exists public.bills (
   id           uuid primary key default gen_random_uuid(),
   created_by   text not null,        -- email of the member who paid and created the bill
+  name         text,                 -- short title, e.g. 'Dinner at Kolachi'
+  description  text,                 -- optional longer note about the bill
   amount       numeric(10, 2) not null,
   bill_date    date not null,
   created_at   timestamptz not null default now(),
 
   constraint bills_amount_check check (amount > 0)
 );
+
+-- Adds name/description for installs created before these columns existed.
+-- Left nullable so bills created by the earlier version stay valid; the app
+-- requires a name on new bills and falls back to the date for older ones.
+alter table public.bills
+  add column if not exists name text;
+
+alter table public.bills
+  add column if not exists description text;
 
 create table if not exists public.bill_participants (
   id           uuid primary key default gen_random_uuid(),

@@ -158,6 +158,10 @@ export default function ManageActivities() {
   };
 
   const confirmMapSelection = () => {
+    if (!selectedCoords) {
+      Alert.alert('No Location Picked', 'Tap a spot on the map or search a place first.');
+      return;
+    }
     if (selectedCoords) {
       const url = `https://www.google.com/maps/search/?api=1&query=${selectedCoords.latitude},${selectedCoords.longitude}`;
       setLocationUrl(url);
