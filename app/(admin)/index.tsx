@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { CardContainer } from '@/components/UI';
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
     <LinearGradient 
@@ -16,7 +17,7 @@ export default function AdminDashboard() {
       end={{ x: 0.8, y: 0.8 }} 
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Admin Portal</Text>
@@ -44,7 +45,7 @@ export default function AdminDashboard() {
             </CardContainer>
           </TouchableOpacity>
 
-          {/* Button to Manage Activities (Added by buddy - Defect #6) */}
+          {/* Button to Manage Activities */}
           <TouchableOpacity 
             activeOpacity={0.8}
             onPress={() => router.push('/(admin)/manage-activities')}
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
   header: { 
     paddingHorizontal: 16, 
     paddingBottom: 20,
-    paddingTop: 10,
+    paddingTop: 0,
   },
   headerTitle: { 
     fontSize: 28, 

@@ -15,7 +15,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
@@ -231,6 +231,7 @@ export default function HomeTab() {
   const router = useRouter();
   const { session } = useAuth();
   const email = session?.user?.email ?? '';
+  const insets = useSafeAreaInsets();
   const [posts, setPosts] = useState<Post[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -951,8 +952,7 @@ export default function HomeTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      {/* SafeAreaView edges={['bottom']} prevents double padding since dynamic header handles top */}
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         {loading ? (
           <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 50 }} />
         ) : (
@@ -1521,7 +1521,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 0,
     paddingBottom: 110,
   },
 

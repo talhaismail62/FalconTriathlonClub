@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
@@ -41,6 +41,7 @@ export default function Profile() {
   const router = useRouter();
   const { session } = useAuth();
   const email = session?.user?.email ?? '';
+  const insets = useSafeAreaInsets();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -236,7 +237,7 @@ export default function Profile() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardContainer}
@@ -427,7 +428,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', 
     alignItems: 'center', 
     paddingHorizontal: 24, 
-    paddingTop: 10, // Removed hardcoded 50px hack, header handles top safe area
+    paddingTop: 0,
     paddingBottom: 10 
   },
   screenTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },

@@ -67,12 +67,7 @@ export default function AdminLayout() {
   return (
     <Stack 
       screenOptions={{
-        headerShown: true,
-        headerTransparent: false, // Prevents background bleed
-        headerShadowVisible: false,
-        headerTintColor: '#ffffff',
-        headerStyle: { backgroundColor: '#0d9488' }, // Solid header color
-        headerTitleStyle: { color: '#ffffff', fontWeight: '700' },
+        headerShown: false, // Removed App Bar
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Admin Panel' }} />

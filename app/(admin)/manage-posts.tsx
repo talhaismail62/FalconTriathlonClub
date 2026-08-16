@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
   Keyboard
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,6 +46,7 @@ const DEFAULT_REGION: Region = {
 export default function ManagePosts() {
   const { session } = useAuth();
   const mapRef = useRef<MapView | null>(null);
+  const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,7 +195,7 @@ export default function ManagePosts() {
 
   return (
     <LinearGradient colors={['#ffffff', '#0d9488']} start={{ x: 0.2, y: 0.2 }} end={{ x: 0.8, y: 0.8 }} style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Manage Club Content</Text>
@@ -340,7 +341,7 @@ export default function ManagePosts() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 10 },
+  header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 0 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
   headerSubtitle: { fontSize: 14, color: '#64748b', fontWeight: '500', marginTop: 2 },
   form: { paddingVertical: 8, gap: 12 },

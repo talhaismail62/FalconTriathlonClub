@@ -9,7 +9,7 @@ import {
   RefreshControl,
   TouchableOpacity
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { CardContainer } from '@/components/UI';
@@ -63,6 +63,7 @@ function formatActivityAge(dateString: string): string {
 export default function ActivitiesTab() {
   const { session } = useAuth();
   const email = session?.user?.email ?? '';
+  const insets = useSafeAreaInsets();
 
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -243,7 +244,7 @@ export default function ActivitiesTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 16 }]} edges={['bottom']}>
         <Text style={styles.heading}>Weekly Activities</Text>
 
         {loading ? (
@@ -271,7 +272,7 @@ export default function ActivitiesTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 8 },
   listContent: { paddingHorizontal: 16, paddingBottom: 110 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   dayBadge: { fontSize: 11, fontWeight: '800', color: '#ffffff', backgroundColor: '#0d9488', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', textTransform: 'uppercase' },

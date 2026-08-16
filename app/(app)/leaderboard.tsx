@@ -11,7 +11,7 @@ import {
   Pressable,
   FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -76,6 +76,7 @@ const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
 
 export default function LeaderboardTab() {
   const now = new Date();
+  const insets = useSafeAreaInsets();
 
   const [scope, setScope] = useState<Scope>('monthly');
   const [gender, setGender] = useState<Gender>('male');
@@ -215,8 +216,7 @@ export default function LeaderboardTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      {/* edges={['bottom']} prevents double padding since dynamic header is active */}
-      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
@@ -441,7 +441,7 @@ function SportStat({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 110 }, // Reduced paddingTop since header handles top
+  content: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 110 },
   heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
 
   segment: {

@@ -143,13 +143,10 @@ export default function ChatbotTab() {
       end={{ x: 0.8, y: 0.8 }}
       style={styles.container}
     >
-      {/* edges={[]} because the header and tab bar already account for insets;
-          KeyboardAvoidingView handles the rest. */}
-      <SafeAreaView style={styles.safeArea} edges={[]}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 8 }]} edges={[]}>
         {/* 'padding' on both platforms: under Expo's edge-to-edge default the
             window no longer resizes when the keyboard opens, so 'height' has
-            nothing to shrink on Android. The view already starts below the
-            header, so no vertical offset is needed. */}
+            nothing to shrink on Android. */}
         <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={0}>
           <Text style={styles.heading}>Sporty AI</Text>
 
@@ -228,7 +225,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0d9488',
     textAlign: 'center',
-    paddingTop: 8,
+    paddingTop: 0,
     paddingBottom: 4,
   },
 

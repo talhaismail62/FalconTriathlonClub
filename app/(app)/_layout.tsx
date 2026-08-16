@@ -2,7 +2,6 @@ import { Redirect, Tabs } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import GradientHeader from '@/components/GradientHeader';
 import { TAB_BAR_HEIGHT, tabBarBottomOffset } from '@/components/tabBarLayout';
 
 export default function AppLayout() {
@@ -18,21 +17,12 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  // Float above the system nav bar, but keep it compact (Defect #13).
-  // Screens that need to clear the bar import the same helpers.
   const barBottom = tabBarBottomOffset(insets);
 
   return (
     <Tabs
       screenOptions={{
-        // ── Dynamic header (Defect #21) ──
-        headerShown: true,
-        headerShadowVisible: false,
-        headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
-        headerBackground: () => <GradientHeader />,
-        
-        // ── Tab bar: darker, shorter, narrower (Defect #13) ──
+        headerShown: false, // Removed App Bar
         tabBarShowLabel: true,
         tabBarActiveTintColor: '#ffffff',
         tabBarInactiveTintColor: 'rgba(255,255,255,0.65)',
@@ -44,20 +34,17 @@ export default function AppLayout() {
         tabBarItemStyle: {
           paddingVertical: 6,
         },
-        // Drop the bar out of the way while typing so it can never sit on top
-        // of a focused input (Sporty's chat bar in particular).
         tabBarHideOnKeyboard: true,
-
         tabBarStyle: {
           position: 'absolute',
           bottom: barBottom,
-          marginHorizontal: 20, // Forces the bar to be narrower with space on left/right
+          marginHorizontal: 20,
           height: TAB_BAR_HEIGHT,
           paddingBottom: 0,
           paddingTop: 0,
           borderRadius: 25,
           borderTopWidth: 0,
-          backgroundColor: '#0f766e', // Solid dark teal so it pops against the screen gradient
+          backgroundColor: '#0f766e',
           elevation: 10,
           shadowColor: '#000000',
           shadowOffset: { width: 0, height: 6 },
@@ -67,7 +54,6 @@ export default function AppLayout() {
         },
       }}
     >
-      {/* 1. Home Feed */}
       <Tabs.Screen
         name="index"
         options={{
@@ -75,8 +61,6 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
         }}
       />
-
-      {/* 2. Activities (Weekly Activities) */}
       <Tabs.Screen
         name="activities"
         options={{
@@ -84,8 +68,6 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="bicycle" size={size} color={color} />,
         }}
       />
-
-      {/* 3. Chatbot */}
       <Tabs.Screen
         name="chatbot"
         options={{
@@ -93,8 +75,6 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
         }}
       />
-
-      {/* 4. Leaderboard */}
       <Tabs.Screen
         name="leaderboard"
         options={{
@@ -102,8 +82,6 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="trophy" size={size} color={color} />,
         }}
       />
-
-      {/* 5. Profile */}
       <Tabs.Screen
         name="profile"
         options={{
