@@ -18,6 +18,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SCREEN_GRADIENT, SPACE } from '@/components/UI';
 import { supabase } from '@/lib/supabase';
 import { File, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
@@ -947,9 +948,10 @@ export default function HomeTab() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
@@ -964,41 +966,44 @@ export default function HomeTab() {
             }
           >
             {/* ── Announcements ── */}
-            <Text style={styles.sectionTitle}>Announcements</Text>
-            <View style={styles.headingSpacer} />
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Announcements</Text>
 
-            {posts.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No posts yet.</Text>
-              </View>
-            ) : (
-              posts.slice(0, POST_PREVIEW_COUNT).map(renderPost)
-            )}
-
-            {/* ── Upcoming Activities ── */}
-            <View style={[styles.sectionHeader, styles.sectionSpacing]}>
-              <Text style={styles.sectionTitle}>Upcoming Activities</Text>
-              <TouchableOpacity onPress={() => router.push('/(app)/activities')}>
-                <Text style={styles.viewAll}>View all</Text>
-              </TouchableOpacity>
+              {posts.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>No posts yet.</Text>
+                </View>
+              ) : (
+                posts.slice(0, POST_PREVIEW_COUNT).map(renderPost)
+              )}
             </View>
 
-            {activities.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No activity upcoming.</Text>
+            {/* ── Upcoming Activities ── */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Upcoming Activities</Text>
+                <TouchableOpacity onPress={() => router.push('/(app)/activities')}>
+                  <Text style={styles.viewAll}>View all</Text>
+                </TouchableOpacity>
               </View>
-            ) : (
-              <View style={styles.card}>
-                {activities
-                  .slice(0, ACTIVITY_PREVIEW_COUNT)
-                  .map((item, index, shown) =>
-                    renderActivity(item, index === shown.length - 1)
-                  )}
-              </View>
-            )}
 
-            {/* ── Bill Splitting ── */}
-            <View style={[styles.sectionSpacing]}>
+              {activities.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>No activity upcoming.</Text>
+                </View>
+              ) : (
+                <View style={styles.card}>
+                  {activities
+                    .slice(0, ACTIVITY_PREVIEW_COUNT)
+                    .map((item, index, shown) =>
+                      renderActivity(item, index === shown.length - 1)
+                    )}
+                </View>
+              )}
+            </View>
+
+            {/* ── Bill + jersey actions (same card type, same gap) ── */}
+            <View style={styles.section}>
               <TouchableOpacity
                 style={styles.jerseyBlock}
                 activeOpacity={0.85}
@@ -1013,10 +1018,7 @@ export default function HomeTab() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
               </TouchableOpacity>
-            </View>
 
-            {/* ── Jersey Sizes ── */}
-            <View style={[styles.sectionSpacing]}>
               <TouchableOpacity
                 style={styles.jerseyBlock}
                 activeOpacity={0.85}
@@ -1034,7 +1036,7 @@ export default function HomeTab() {
 
               {isAdmin && (
                 <TouchableOpacity
-                  style={[styles.jerseyBlock, styles.jerseyBlockSpacing]}
+                  style={styles.jerseyBlock}
                   activeOpacity={0.85}
                   onPress={openJerseyListModal}
                 >
@@ -1051,8 +1053,9 @@ export default function HomeTab() {
             </View>
 
             {/* ── Quick Links ── */}
-            <Text style={[styles.sectionTitle, styles.sectionSpacing]}>Quick Links</Text>
-            <View style={styles.quickLinkRow}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Quick Links</Text>
+              <View style={styles.quickLinkRow}>
               <TouchableOpacity
                 style={styles.quickLink}
                 activeOpacity={0.8}
@@ -1074,6 +1077,7 @@ export default function HomeTab() {
                 <Ionicons name="logo-facebook" size={30} color="#0d9488" />
                 <Text style={styles.quickLinkText}>Facebook</Text>
               </TouchableOpacity>
+            </View>
             </View>
           </ScrollView>
         )}
@@ -1520,20 +1524,21 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACE.screen,
     paddingTop: 0,
     paddingBottom: 110,
   },
 
   // Sections
+  section: {
+    marginBottom: SPACE.section,
+    gap: SPACE.stack,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  sectionSpacing: { marginTop: 28 },
-  headingSpacer: { height: 12 },
   sectionTitle: { fontSize: 21, fontWeight: '800', color: '#0f172a' },
   viewAll: { fontSize: 14, fontWeight: '700', color: '#0d9488' },
 
@@ -1542,7 +1547,6 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#ffffff',
     padding: 16,
-    marginBottom: 16,
     borderRadius: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
@@ -1567,7 +1571,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    marginTop: 10,
+    marginTop: 12,
     alignSelf: 'flex-start',
   },
   locationText: {
@@ -1605,11 +1609,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    marginTop: 10,
-    paddingTop: 10,
+    marginTop: 12,
+    paddingTop: 12,
   },
   expandToggleText: { fontSize: 13, fontWeight: '700', color: '#0d9488' },
-  rsvpSection: { marginTop: 6 },
+  rsvpSection: { marginTop: 12 },
   rsvpOptionRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   rsvpChip: {
     flex: 1,
@@ -1663,7 +1667,6 @@ const styles = StyleSheet.create({
   jerseyBody: { flex: 1 },
   jerseyTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
   jerseySubtitle: { fontSize: 12, color: '#64748b', marginTop: 2 },
-  jerseyBlockSpacing: { marginTop: 12 },
 
   // Jersey sizes admin list
   jerseyEntryCard: {
@@ -1772,7 +1775,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 8,
   },
-  fieldSpacing: { marginTop: 20 },
+  fieldSpacing: { marginTop: 16 },
   sizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   sizeChip: {
     width: 52,
@@ -1803,7 +1806,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 12,
     marginBottom: 20,
   },
   submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
@@ -1909,7 +1912,7 @@ const styles = StyleSheet.create({
   checkboxBoxChecked: { backgroundColor: '#0d9488' },
   billParticipantName: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
   billParticipantAmount: { fontSize: 14, fontWeight: '700', color: '#0d9488' },
-  billActionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
+  billActionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 12 },
   billEditBtn: {
     backgroundColor: '#ccfbf1',
     paddingHorizontal: 12,

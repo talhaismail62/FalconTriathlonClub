@@ -1,6 +1,21 @@
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
+/** Screen background: dark teal at the top so status-bar icons stay readable, then white, then teal. */
+export const SCREEN_GRADIENT = {
+  colors: ['#0f766e', '#ffffff', '#0d9488'] as const,
+  locations: [0, 0.16, 1] as const,
+  start: { x: 0.5, y: 0 },
+  end: { x: 0.5, y: 1 },
+};
+
+/** Shared layout rhythm used across screens. */
+export const SPACE = {
+  screen: 16,
+  section: 24,
+  stack: 12,
+};
+
 export function GradientButton({
   label,
   icon,
@@ -44,7 +59,7 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 16,
     overflow: 'hidden',
-    marginTop: 10,
+    marginTop: 0,
     shadowColor: '#0d9488',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -68,7 +83,7 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: '#ffffff',
     padding: 16,
-    marginBottom: 16,
+    marginBottom: SPACE.stack,
     borderRadius: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },

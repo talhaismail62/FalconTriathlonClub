@@ -18,6 +18,7 @@ import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import { signInWithGoogle } from '@/lib/googleAuth';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SCREEN_GRADIENT } from '@/components/UI';
 
 export default function Login() {
   const router = useRouter();
@@ -87,9 +88,10 @@ export default function Login() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
       {/* ScrollView inside KAV fixes the "screen stops moving up" issue (Defect #12) */}

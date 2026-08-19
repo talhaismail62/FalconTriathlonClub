@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { signInWithGoogle } from '@/lib/googleAuth';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SCREEN_GRADIENT } from '@/components/UI';
 
 export default function Signup() {
   const router = useRouter();
@@ -106,9 +107,10 @@ export default function Signup() {
 
   return (
     <LinearGradient
-      colors={['#fff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
       <KeyboardAvoidingView
@@ -230,7 +232,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#64748b',
     marginTop: 4,
-    marginBottom: 32,
+    marginBottom: 28,
     textAlign: 'center',
   },
   input: {

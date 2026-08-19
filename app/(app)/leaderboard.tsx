@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SCREEN_GRADIENT } from '@/components/UI';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -211,9 +212,10 @@ export default function LeaderboardTab() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
@@ -442,7 +444,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 110 },
-  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
+  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginBottom: 12 },
 
   segment: {
     flexDirection: 'row',
@@ -546,7 +548,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,

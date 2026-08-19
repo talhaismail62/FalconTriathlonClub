@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import MapView, { Marker, Region } from 'react-native-maps';
 import { supabase } from '@/lib/supabase';
-import { CardContainer, GradientButton } from '@/components/UI';
+import { CardContainer, GradientButton, SCREEN_GRADIENT } from '@/components/UI';
 import { openMapLocation } from '@/lib/location';
 
 interface Activity {
@@ -289,9 +289,10 @@ export default function ManageActivities() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -488,8 +489,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 0,
+    paddingBottom: 12,
   },
   addButton: {
     backgroundColor: '#0d9488',
@@ -499,12 +500,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
   listContent: { paddingHorizontal: 16, paddingBottom: 40 },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   dayBadge: {
     fontSize: 12,
     fontWeight: '800',
@@ -584,11 +580,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   dayPickerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 16,
   },
   daySelectorChip: {
@@ -597,7 +594,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 8,
     flex: 1,
-    marginHorizontal: 2,
     alignItems: 'center',
   },
   activeDayChip: { backgroundColor: '#0d9488' },
@@ -646,7 +642,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 12,
     marginBottom: 20,
   },
   submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },

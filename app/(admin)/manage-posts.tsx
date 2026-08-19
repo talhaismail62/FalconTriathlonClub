@@ -21,7 +21,7 @@ import { File } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import { CardContainer, GradientButton } from '@/components/UI';
+import { CardContainer, GradientButton, SCREEN_GRADIENT } from '@/components/UI';
 import { openMapLocation } from '@/lib/location';
 
 interface Post { 
@@ -194,7 +194,7 @@ export default function ManagePosts() {
   }
 
   return (
-    <LinearGradient colors={['#ffffff', '#0d9488']} start={{ x: 0.2, y: 0.2 }} end={{ x: 0.8, y: 0.8 }} style={styles.container}>
+    <LinearGradient colors={[...SCREEN_GRADIENT.colors]} locations={[...SCREEN_GRADIENT.locations]} start={SCREEN_GRADIENT.start} end={SCREEN_GRADIENT.end} style={styles.container}>
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         
         <View style={styles.header}>
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   header: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 0 },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
-  headerSubtitle: { fontSize: 14, color: '#64748b', fontWeight: '500', marginTop: 2 },
+  headerSubtitle: { fontSize: 14, color: '#64748b', fontWeight: '500', marginTop: 4 },
   form: { paddingVertical: 8, gap: 12 },
   input: { backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: '#0f172a' },
   mapTriggerButton: {
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   mapTriggerText: { fontSize: 15, fontWeight: '700', color: '#0d9488' },
   imagePicker: { padding: 15, borderWidth: 2, borderColor: '#ccfbf1', borderStyle: 'dashed', borderRadius: 10, alignItems: 'center', backgroundColor: '#fff' },
-  dividerRow: { marginTop: 16, borderBottomWidth: 1.5, borderColor: '#e2e8f0', paddingBottom: 6 },
+  dividerRow: { marginTop: 12, borderBottomWidth: 1.5, borderColor: '#e2e8f0', paddingBottom: 6 },
   dividerText: { fontSize: 14, fontWeight: '700', color: '#475569' },
   postImage: { width: '100%', height: 150, borderRadius: 8, marginBottom: 10 },
   postTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', flex: 1, marginBottom: 4 },

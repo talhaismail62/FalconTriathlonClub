@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import Avatar from '@/components/Avatar';
-import { CardContainer } from '@/components/UI';
+import { CardContainer, SCREEN_GRADIENT } from '@/components/UI';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -224,7 +224,7 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <LinearGradient colors={['#ffffff', '#0d9488']} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <LinearGradient colors={[...SCREEN_GRADIENT.colors]} locations={[...SCREEN_GRADIENT.locations]} start={SCREEN_GRADIENT.start} end={SCREEN_GRADIENT.end} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#0d9488" />
       </LinearGradient>
     );
@@ -232,9 +232,10 @@ export default function Profile() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
@@ -427,14 +428,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    paddingHorizontal: 24, 
+    paddingHorizontal: 16, 
     paddingTop: 0,
-    paddingBottom: 10 
+    paddingBottom: 12 
   },
   screenTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
   editPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ccfbf1', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 4 },
   editPillText: { color: '#0d9488', fontWeight: '700', fontSize: 13 },
-  inner: { paddingHorizontal: 24, paddingBottom: 40, alignItems: 'center' },
+  inner: { paddingHorizontal: 16, paddingBottom: 40, alignItems: 'center' },
   avatarContainer: { position: 'relative', marginBottom: 12, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 4 },
   editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#0d9488', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 2, borderColor: '#ffffff' },
   editBadgeText: { color: '#ffffff', fontSize: 10, fontWeight: '800' },
@@ -469,7 +470,7 @@ const styles = StyleSheet.create({
   viewLabel: { fontSize: 13, fontWeight: '600', color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   viewValue: { fontSize: 16, fontWeight: '600', color: '#0f172a' },
   divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 12 },
-  signOutButton: { borderWidth: 1.5, borderColor: '#fee2e2', backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40, width: '100%', alignItems: 'center', marginTop: 16 },
+  signOutButton: { borderWidth: 1.5, borderColor: '#fee2e2', backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40, width: '100%', alignItems: 'center', marginTop: 12 },
   signOutText: { color: '#ef4444', fontSize: 16, fontWeight: '700' },
   disabledButton: { opacity: 0.5 },
 });

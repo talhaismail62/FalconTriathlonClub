@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tabBarClearance } from '@/components/tabBarLayout';
+import { SCREEN_GRADIENT } from '@/components/UI';
 
 // ---------------------------------------------------------------------------
 // Gemini API config
@@ -138,12 +139,13 @@ export default function ChatbotTab() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 8 }]} edges={[]}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={[]}>
         {/* 'padding' on both platforms: under Expo's edge-to-edge default the
             window no longer resizes when the keyboard opens, so 'height' has
             nothing to shrink on Android. */}
@@ -226,10 +228,10 @@ const styles = StyleSheet.create({
     color: '#0d9488',
     textAlign: 'center',
     paddingTop: 0,
-    paddingBottom: 4,
+    paddingBottom: 12,
   },
 
-  messagesContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16, gap: 10 },
+  messagesContent: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 16, gap: 10 },
 
   bubbleRow: { flexDirection: 'row' },
   bubbleRowUser: { justifyContent: 'flex-end' },

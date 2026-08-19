@@ -12,7 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
-import { CardContainer } from '@/components/UI';
+import { CardContainer, SCREEN_GRADIENT } from '@/components/UI';
 import { Ionicons } from '@expo/vector-icons';
 import { openMapLocation } from '@/lib/location';
 import { useAuth } from '@/context/AuthContext';
@@ -239,12 +239,13 @@ export default function ActivitiesTab() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 16 }]} edges={['bottom']}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
         <Text style={styles.heading}>Weekly Activities</Text>
 
         {loading ? (
@@ -272,7 +273,7 @@ export default function ActivitiesTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 8 },
+  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 12 },
   listContent: { paddingHorizontal: 16, paddingBottom: 110 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   dayBadge: { fontSize: 11, fontWeight: '800', color: '#ffffff', backgroundColor: '#0d9488', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', textTransform: 'uppercase' },

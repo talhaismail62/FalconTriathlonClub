@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { CardContainer } from '@/components/UI';
+import { CardContainer, SCREEN_GRADIENT } from '@/components/UI';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -12,9 +12,10 @@ export default function AdminDashboard() {
 
   return (
     <LinearGradient 
-      colors={['#ffffff', '#0d9488']} 
-      start={{ x: 0.2, y: 0.2 }} 
-      end={{ x: 0.8, y: 0.8 }} 
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end} 
       style={styles.container}
     >
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
@@ -29,7 +30,6 @@ export default function AdminDashboard() {
           <TouchableOpacity 
             activeOpacity={0.8}
             onPress={() => router.push('/(admin)/manage-posts')}
-            style={styles.touchableMargin}
           >
             <CardContainer>
               <View style={styles.cardRow}>
@@ -49,7 +49,6 @@ export default function AdminDashboard() {
           <TouchableOpacity 
             activeOpacity={0.8}
             onPress={() => router.push('/(admin)/manage-activities')}
-            style={styles.touchableMargin}
           >
             <CardContainer>
               <View style={styles.cardRow}>
@@ -80,7 +79,7 @@ const styles = StyleSheet.create({
   },
   header: { 
     paddingHorizontal: 16, 
-    paddingBottom: 20,
+    paddingBottom: 12,
     paddingTop: 0,
   },
   headerTitle: { 
@@ -92,13 +91,10 @@ const styles = StyleSheet.create({
     fontSize: 14, 
     color: '#64748b', 
     fontWeight: '500', 
-    marginTop: 2 
+    marginTop: 4 
   },
   content: { 
     paddingHorizontal: 16, 
-  },
-  touchableMargin: {
-    marginBottom: 12,
   },
   cardRow: {
     flexDirection: 'row',

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SCREEN_GRADIENT } from '@/components/UI';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
@@ -91,7 +92,13 @@ export default function ResetPassword() {
 
   if (hasRecoverySession === null) {
     return (
-      <LinearGradient colors={['#ffffff', '#0d9488']} style={styles.centered}>
+      <LinearGradient
+        colors={[...SCREEN_GRADIENT.colors]}
+        locations={[...SCREEN_GRADIENT.locations]}
+        start={SCREEN_GRADIENT.start}
+        end={SCREEN_GRADIENT.end}
+        style={styles.centered}
+      >
         <ActivityIndicator size="large" color="#0d9488" />
       </LinearGradient>
     );
@@ -100,9 +107,10 @@ export default function ResetPassword() {
   if (!hasRecoverySession) {
     return (
       <LinearGradient
-        colors={['#ffffff', '#0d9488']}
-        start={{ x: 0.2, y: 0.2 }}
-        end={{ x: 0.8, y: 0.8 }}
+        colors={[...SCREEN_GRADIENT.colors]}
+        locations={[...SCREEN_GRADIENT.locations]}
+        start={SCREEN_GRADIENT.start}
+        end={SCREEN_GRADIENT.end}
         style={styles.centered}
       >
         <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
@@ -126,9 +134,10 @@ export default function ResetPassword() {
 
   return (
     <LinearGradient
-      colors={['#ffffff', '#0d9488']}
-      start={{ x: 0.2, y: 0.2 }}
-      end={{ x: 0.8, y: 0.8 }}
+      colors={[...SCREEN_GRADIENT.colors]}
+      locations={[...SCREEN_GRADIENT.locations]}
+      start={SCREEN_GRADIENT.start}
+      end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
       <KeyboardAvoidingView
