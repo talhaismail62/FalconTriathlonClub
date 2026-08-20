@@ -120,21 +120,35 @@ export default function ActivitiesTab() {
     if (!email) return;
     setIsSavingRsvp(true);
 
-    const { data: profile } = await supabase
-      .from('myusers')
-      .select('name')
-      .eq('email', email.toLowerCase())
-      .single();
+    const normalizedEmail = email.toLowerCase();
+    const myCurrentVote = (rsvpsByActivity[activityId] || []).find(
+      (r) => r.email.toLowerCase() === normalizedEmail
+    )?.status;
 
-    const { error } = await supabase.from('activity_rsvps').upsert(
-      {
-        activity_id: activityId,
-        email: email.toLowerCase(),
-        name: profile?.name || null,
-        status,
-      },
-      { onConflict: 'activity_id,email' }
-    );
+    let error;
+    if (myCurrentVote === status) {
+      ({ error } = await supabase
+        .from('activity_rsvps')
+        .delete()
+        .eq('activity_id', activityId)
+        .eq('email', normalizedEmail));
+    } else {
+      const { data: profile } = await supabase
+        .from('myusers')
+        .select('name')
+        .eq('email', normalizedEmail)
+        .single();
+
+      ({ error } = await supabase.from('activity_rsvps').upsert(
+        {
+          activity_id: activityId,
+          email: normalizedEmail,
+          name: profile?.name || null,
+          status,
+        },
+        { onConflict: 'activity_id,email' }
+      ));
+    }
 
     setIsSavingRsvp(false);
     if (error) return;

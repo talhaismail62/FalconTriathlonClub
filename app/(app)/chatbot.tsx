@@ -7,13 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
-  Keyboard,
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { tabBarClearance } from '@/components/tabBarLayout';
 import { SCREEN_GRADIENT } from '@/components/UI';
 
 // ---------------------------------------------------------------------------
@@ -40,48 +39,21 @@ const WELCOME_MESSAGE: Message = {
   content: "Hey! I'm Sporty AI 🏃 Ask me anything about training, workouts, recovery, or nutrition for sport.",
 };
 
-// Tracks only whether the keyboard is open, not its height — the height differs
-// between platforms (Android excludes the navigation bar) and is unreliable to
-// position against. KeyboardAvoidingView does the actual lifting.
-function useKeyboardShown(): boolean {
-  const [shown, setShown] = useState(false);
-
-  useEffect(() => {
-    // The Will* events fire before the animation on iOS, so the layout settles
-    // in step with the keyboard instead of snapping after it.
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, () => setShown(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setShown(false));
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-
-  return shown;
-}
-
 export default function ChatbotTab() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  // Derived from the safe-area inset at runtime, so it adapts to any screen
-  // size, notch, or gesture bar.
-  const insets = useSafeAreaInsets();
-
-  // While the keyboard is up the tab bar hides itself (tabBarHideOnKeyboard),
-  // so only the keyboard needs clearing; otherwise clear the floating bar.
-  const keyboardShown = useKeyboardShown();
-  const bottomClearance = keyboardShown ? 0 : tabBarClearance(insets);
-
   function scrollToEnd() {
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   }
+
+  useEffect(() => {
+    scrollToEnd();
+  }, [messages.length, loading]);
 
   async function handleSend() {
     const text = input.trim();
@@ -91,14 +63,14 @@ export default function ChatbotTab() {
     const nextMessages = [...messages, userMessage];
 
     setMessages(nextMessages);
-    setInput(''); // Clears the text input immediately
+    setInput('');
     setLoading(true);
     scrollToEnd();
 
     try {
       const reply = await callAI(nextMessages);
       setMessages((prev) => [...prev, { id: `${Date.now()}-bot`, role: 'assistant', content: reply }]);
-    } catch (e: any) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -145,12 +117,23 @@ export default function ChatbotTab() {
       end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={[]}>
-        {/* 'padding' on both platforms: under Expo's edge-to-edge default the
-            window no longer resizes when the keyboard opens, so 'height' has
-            nothing to shrink on Android. */}
-        <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={0}>
-          <Text style={styles.heading}>Sporty AI</Text>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.replace('/(app)/')}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Home"
+            >
+              <Ionicons name="arrow-back" size={24} color="#0f172a" />
+            </TouchableOpacity>
+            <Text style={styles.heading}>Sporty AI</Text>
+          </View>
 
           <ScrollView
             ref={scrollRef}
@@ -159,6 +142,7 @@ export default function ChatbotTab() {
             showsVerticalScrollIndicator={false}
             onContentSizeChange={scrollToEnd}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
           >
             {messages.map((m) => (
               <MessageBubble key={m.id} message={m} />
@@ -166,9 +150,7 @@ export default function ChatbotTab() {
             {loading && <TypingBubble />}
           </ScrollView>
 
-          {/* Sits directly above the keyboard when open, above the floating
-              tab bar when closed. */}
-          <View style={[styles.inputBar, { marginBottom: bottomClearance }]}>
+          <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
             <TextInput
               style={styles.input}
               value={input}
@@ -177,8 +159,9 @@ export default function ChatbotTab() {
               placeholderTextColor="#94a3b8"
               returnKeyType="send"
               multiline
-              blurOnSubmit={false} // Prevents keyboard from closing on Enter
-              onSubmitEditing={handleSend} // Makes Enter key send & clear text
+              blurOnSubmit={false}
+              onSubmitEditing={handleSend}
+              onFocus={scrollToEnd}
             />
             <TouchableOpacity
               style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
@@ -222,16 +205,37 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   flex: { flex: 1 },
 
-  heading: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0d9488',
-    textAlign: 'center',
-    paddingTop: 0,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 10,
     paddingBottom: 12,
+    gap: 8,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heading: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'left',
   },
 
-  messagesContent: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 16, gap: 10 },
+  messagesContent: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 16,
+    gap: 10,
+    flexGrow: 1,
+  },
 
   bubbleRow: { flexDirection: 'row' },
   bubbleRowUser: { justifyContent: 'flex-end' },
@@ -272,8 +276,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 10,
     backgroundColor: 'rgba(255,255,255,0.95)',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
   },
   input: {
     flex: 1,
@@ -284,11 +290,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
     color: '#0f172a',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   sendBtn: {
     width: 40,

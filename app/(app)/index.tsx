@@ -701,21 +701,35 @@ export default function HomeTab() {
     if (!email) return;
     setIsSavingRsvp(true);
 
-    const { data: profile } = await supabase
-      .from('myusers')
-      .select('name')
-      .eq('email', email.toLowerCase())
-      .single();
+    const normalizedEmail = email.toLowerCase();
+    const myCurrentVote = (rsvpsByActivity[activityId] || []).find(
+      (r) => r.email.toLowerCase() === normalizedEmail
+    )?.status;
 
-    const { error } = await supabase.from('activity_rsvps').upsert(
-      {
-        activity_id: activityId,
-        email: email.toLowerCase(),
-        name: profile?.name || null,
-        status,
-      },
-      { onConflict: 'activity_id,email' }
-    );
+    let error;
+    if (myCurrentVote === status) {
+      ({ error } = await supabase
+        .from('activity_rsvps')
+        .delete()
+        .eq('activity_id', activityId)
+        .eq('email', normalizedEmail));
+    } else {
+      const { data: profile } = await supabase
+        .from('myusers')
+        .select('name')
+        .eq('email', normalizedEmail)
+        .single();
+
+      ({ error } = await supabase.from('activity_rsvps').upsert(
+        {
+          activity_id: activityId,
+          email: normalizedEmail,
+          name: profile?.name || null,
+          status,
+        },
+        { onConflict: 'activity_id,email' }
+      ));
+    }
 
     setIsSavingRsvp(false);
     if (error) return;
@@ -1452,18 +1466,25 @@ export default function HomeTab() {
                 onChangeText={setMemberSearch}
               />
 
-              <View style={styles.memberListBox}>
+              <ScrollView
+                style={styles.memberListBox}
+                contentContainerStyle={styles.memberListContent}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+                keyboardShouldPersistTaps="handled"
+              >
                 {allMembers
                   .filter((m) => {
                     const label = (m.name || m.email).toLowerCase();
                     return label.includes(memberSearch.toLowerCase());
                   })
-                  .map((m) => {
+                  .map((m, index, arr) => {
                     const key = m.email.toLowerCase();
                     const selected = selectedParticipants.get(key);
                     const isSelected = !!selected;
+                    const isLast = index === arr.length - 1;
                     return (
-                      <View key={m.email} style={styles.memberRow}>
+                      <View key={m.email} style={[styles.memberRow, isLast && styles.memberRowLast]}>
                         <TouchableOpacity
                           style={styles.memberRowMain}
                           onPress={() => toggleParticipantSelected(m)}
@@ -1497,7 +1518,7 @@ export default function HomeTab() {
                       </View>
                     );
                   })}
-              </View>
+              </ScrollView>
 
               <TouchableOpacity
                 style={[styles.submitButton, isSavingBill && styles.disabledButton]}
@@ -1933,6 +1954,10 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 10,
     marginBottom: 16,
+    backgroundColor: '#ffffff',
+  },
+  memberListContent: {
+    paddingBottom: 4,
   },
   memberRow: {
     flexDirection: 'row',
@@ -1943,9 +1968,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
     gap: 8,
+    minHeight: 44,
   },
-  memberRowMain: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  memberRowText: { fontSize: 14, fontWeight: '600', color: '#0f172a', flexShrink: 1 },
+  memberRowLast: {
+    borderBottomWidth: 0,
+  },
+  memberRowMain: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
+  memberRowText: { fontSize: 14, fontWeight: '600', color: '#0f172a', flex: 1 },
   guestStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   guestStepperButton: {
     width: 26,

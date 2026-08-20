@@ -73,6 +73,8 @@ export default function AppLayout() {
         options={{
           title: 'Sporty',
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
+          // Hide the floating tab bar on this screen so the input can sit flush.
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen
