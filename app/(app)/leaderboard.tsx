@@ -16,8 +16,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SCREEN_GRADIENT } from '@/components/UI';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/lib/supabase';
 
-const API_URL = (process.env.EXPO_PUBLIC_LEADERBOARD_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
+//const API_URL = (process.env.EXPO_PUBLIC_LEADERBOARD_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -115,28 +116,42 @@ export default function LeaderboardTab() {
 
   const fetchBoard = useCallback(async () => {
     setError(null);
-    const url =
-      scope === 'monthly'
-        ? `${API_URL}/leaderboard?month=${month}&year=${year}`
-        : `${API_URL}/Yleaderboard?year=${year}`;
+    
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Server responded ${res.status}`);
-      const json = await res.json();
-      const normalised = normalise(json);
+      // 1. Query Supabase directly based on monthly or yearly scope
+      let query = supabase.from(
+        scope === 'monthly' ? 'monthly_leaderboard' : 'yearly_leaderboard'
+      ).select('*');
+
+      if (scope === 'monthly') {
+        query = query.eq('year', year).eq('month', month);
+      } else {
+        query = query.eq('year', year);
+      }
+
+      // Order by score descending, just like the old Python backend did
+      query = query.order('score', { ascending: false });
+
+      const { data, error: dbError } = await query;
+
+      if (dbError) throw new Error(dbError.message);
+
+      // 2. Split the results into male and female arrays
+      const normalised: Board = {
+        male: (data || []).filter((r: any) => r.gender === 'male'),
+        female: (data || []).filter((r: any) => r.gender === 'female'),
+      };
+
       const hadStaleData = showingCachedRef.current;
 
       setBoard(normalised);
       setShowingCached(false);
       setCachedAt(Date.now());
 
-      // The period is only genuinely empty when neither board has entries.
       setConfirmedEmpty(
         normalised.male.length === 0 && normalised.female.length === 0
       );
 
-      // Only announce the refresh if the user was actually looking at stale
-      // data — otherwise it's just noise on a normal first load.
       if (hadStaleData) {
         setJustUpdated(true);
         setTimeout(() => setJustUpdated(false), 3000);
@@ -147,11 +162,9 @@ export default function LeaderboardTab() {
         JSON.stringify({ board: normalised, savedAt: Date.now() })
       );
     } catch (e: any) {
-      // Keep any cached rankings on screen rather than blanking the list —
-      // stale data beats no data when the user is offline.
       setError(
         e?.message === 'Network request failed'
-          ? `Could not reach the leaderboard server at ${API_URL}. Is it running?`
+          ? 'Could not reach the database. Check your internet connection.'
           : e?.message ?? 'Failed to load leaderboard.'
       );
     }

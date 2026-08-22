@@ -32,6 +32,14 @@ module.exports = {
           },
         },
       ],
+      // ADD THIS NEW BLOCK RIGHT HERE:
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/icon.png", 
+          color: "#0d9488"
+        }
+      ]
     ],
     android: {
       ...appJson.expo.android,
