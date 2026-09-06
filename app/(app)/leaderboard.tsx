@@ -22,6 +22,39 @@ const API_URL = (process.env.EXPO_PUBLIC_LEADERBOARD_API_URL ?? 'http://localhos
   ''
 );
 
+/** Map raw network/API failures into short, non-technical copy. */
+function friendlyLeaderboardError(raw: string | undefined, apiUrl: string): string {
+  const msg = (raw ?? '').toLowerCase();
+  if (
+    msg.includes('network request failed') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('timed out') ||
+    msg.includes('timeout')
+  ) {
+    return 'Leaderboard is waking up. Tap Retry in a moment.';
+  }
+  if (msg.includes('schema cache') || msg.includes('could not find the table')) {
+    return 'Leaderboard is temporarily unavailable. Please try again.';
+  }
+  if (msg.includes('server responded')) {
+    return 'Leaderboard server is busy. Please try again.';
+  }
+  if (msg.includes('is it running') || msg.includes(apiUrl.toLowerCase())) {
+    return 'Leaderboard is waking up. Tap Retry in a moment.';
+  }
+  return 'Could not load the leaderboard. Please try again.';
+}
+
+async function fetchWithTimeout(url: string, ms = 25000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -123,38 +156,48 @@ export default function LeaderboardTab() {
         ? `${API_URL}/leaderboard?month=${month}&year=${year}`
         : `${API_URL}/Yleaderboard?year=${year}`;
 
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Server responded ${res.status}`);
-      const json = await res.json();
-      const normalised = normalise(json);
+    // Render free tier often needs a warm-up request; retry once before surfacing UI error.
+    const attempts = 2;
+    let lastError: string | undefined;
 
-      const hadStaleData = showingCachedRef.current;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const res = await fetchWithTimeout(url);
+        if (!res.ok) throw new Error(`Server responded ${res.status}`);
+        const json = await res.json();
+        const normalised = normalise(json);
 
-      setBoard(normalised);
-      setShowingCached(false);
-      setCachedAt(Date.now());
+        const hadStaleData = showingCachedRef.current;
 
-      setConfirmedEmpty(
-        normalised.male.length === 0 && normalised.female.length === 0
-      );
+        setBoard(normalised);
+        setShowingCached(false);
+        setCachedAt(Date.now());
+        setError(null);
 
-      if (hadStaleData) {
-        setJustUpdated(true);
-        setTimeout(() => setJustUpdated(false), 3000);
+        setConfirmedEmpty(
+          normalised.male.length === 0 && normalised.female.length === 0
+        );
+
+        if (hadStaleData) {
+          setJustUpdated(true);
+          setTimeout(() => setJustUpdated(false), 3000);
+        }
+
+        await AsyncStorage.setItem(
+          getCacheKey(),
+          JSON.stringify({ board: normalised, savedAt: Date.now() })
+        );
+        return;
+      } catch (e: any) {
+        lastError =
+          e?.name === 'AbortError' ? 'timeout' : e?.message ?? 'Failed to load leaderboard.';
+        if (attempt < attempts - 1) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
       }
-
-      await AsyncStorage.setItem(
-        getCacheKey(),
-        JSON.stringify({ board: normalised, savedAt: Date.now() })
-      );
-    } catch (e: any) {
-      setError(
-        e?.message === 'Network request failed'
-          ? `Could not reach the leaderboard server at ${API_URL}. Is it running?`
-          : e?.message ?? 'Failed to load leaderboard.'
-      );
     }
+
+    setError(friendlyLeaderboardError(lastError, API_URL));
   }, [scope, month, year, getCacheKey]);
 
   useEffect(() => {
@@ -310,7 +353,7 @@ export default function LeaderboardTab() {
             <ActivityIndicator color="#0d9488" size="large" style={{ marginTop: 40 }} />
           ) : error && list.length === 0 ? (
             <View style={styles.messageCard}>
-              <Ionicons name="cloud-offline-outline" size={28} color="#ef4444" />
+              <Ionicons name="cloud-offline-outline" size={28} color="#0d9488" />
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity onPress={onRefresh} style={styles.retryBtn}>
                 <Text style={styles.retryText}>Retry</Text>
@@ -538,7 +581,7 @@ const styles = StyleSheet.create({
   },
   offlineText: { flex: 1, fontSize: 12.5, fontWeight: '600', color: '#b91c1c', lineHeight: 17 },
   offlineRetry: { fontSize: 12.5, fontWeight: '800', color: '#0d9488' },
-  errorText: { color: '#ef4444', fontWeight: '600', textAlign: 'center' },
+  errorText: { color: '#334155', fontWeight: '600', textAlign: 'center', lineHeight: 20 },
   emptyText: { color: '#64748b', fontWeight: '600', textAlign: 'center' },
   noDataTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
   retryBtn: { marginTop: 6, backgroundColor: '#0d9488', paddingVertical: 8, paddingHorizontal: 20, borderRadius: 10 },

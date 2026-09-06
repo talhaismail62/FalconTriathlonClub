@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import Avatar from '@/components/Avatar';
+import AvatarCropModal from '@/components/AvatarCropModal';
 import { CardContainer, SCREEN_GRADIENT } from '@/components/UI';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -104,6 +105,8 @@ export default function Profile() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [cropUri, setCropUri] = useState<string | null>(null);
+  const [cropVisible, setCropVisible] = useState(false);
 
   const filteredCities = useMemo(() => {
     const q = citySearch.trim().toLowerCase();
@@ -180,15 +183,16 @@ export default function Profile() {
       return;
     }
 
+    // Skip the system crop UI (black "Crop" chrome is hard to see). We use our own.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.4,
+      allowsEditing: false,
+      quality: 0.85,
     });
 
     if (!result.canceled && result.assets[0].uri) {
-      setAvatarUri(result.assets[0].uri);
+      setCropUri(result.assets[0].uri);
+      setCropVisible(true);
     }
   }
 
@@ -634,6 +638,20 @@ export default function Profile() {
           </View>
         </View>
       </Modal>
+
+      <AvatarCropModal
+        visible={cropVisible}
+        imageUri={cropUri}
+        onCancel={() => {
+          setCropVisible(false);
+          setCropUri(null);
+        }}
+        onDone={(uri) => {
+          setAvatarUri(uri);
+          setCropVisible(false);
+          setCropUri(null);
+        }}
+      />
     </LinearGradient>
   );
 }
