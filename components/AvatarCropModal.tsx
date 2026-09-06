@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -32,42 +32,50 @@ export default function AvatarCropModal({ visible, imageUri, onCancel, onDone }:
 
   const cropSize = Math.min(screenW - 48, Math.min(screenH * 0.55, 360));
 
-  const display = useMemo(() => {
-    if (!natural) return { width: cropSize, height: cropSize };
-    const aspect = natural.w / natural.h;
-    if (aspect >= 1) {
-      return { width: cropSize, height: cropSize / aspect };
-    }
-    return { width: cropSize * aspect, height: cropSize };
-  }, [natural, cropSize]);
+  useEffect(() => {
+    setNatural(null);
+    if (!imageUri) return;
+    Image.getSize(
+      imageUri,
+      (w, h) => setNatural({ w, h }),
+      () => setNatural(null)
+    );
+  }, [imageUri]);
 
   async function handleDone() {
-    if (!imageUri || !natural) return;
+    if (!imageUri) return;
     setBusy(true);
     try {
-      // Center-square crop in source pixels, then resize for upload.
-      const side = Math.min(natural.w, natural.h);
-      const originX = Math.max(0, Math.floor((natural.w - side) / 2));
-      const originY = Math.max(0, Math.floor((natural.h - side) / 2));
+      let w = natural?.w;
+      let h = natural?.h;
+      if (!w || !h) {
+        await new Promise<void>((resolve, reject) => {
+          Image.getSize(
+            imageUri,
+            (rw, rh) => {
+              w = rw;
+              h = rh;
+              resolve();
+            },
+            reject
+          );
+        });
+      }
+
+      const side = Math.min(w!, h!);
+      const originX = Math.max(0, Math.floor((w! - side) / 2));
+      const originY = Math.max(0, Math.floor((h! - side) / 2));
 
       const result = await ImageManipulator.manipulateAsync(
         imageUri,
         [
-          {
-            crop: {
-              originX,
-              originY,
-              width: side,
-              height: side,
-            },
-          },
+          { crop: { originX, originY, width: side, height: side } },
           { resize: { width: 512 } },
         ],
         { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
       );
       onDone(result.uri);
     } catch {
-      // If crop fails, fall back to the original pick so the user isn't blocked.
       onDone(imageUri);
     } finally {
       setBusy(false);
@@ -112,12 +120,8 @@ export default function AvatarCropModal({ visible, imageUri, onCancel, onDone }:
               <View style={[styles.frame, { width: cropSize, height: cropSize }]}>
                 <Image
                   source={{ uri: imageUri }}
-                  style={{ width: display.width, height: display.height }}
+                  style={StyleSheet.absoluteFillObject}
                   resizeMode="cover"
-                  onLoad={(e) => {
-                    const { width, height } = e.nativeEvent.source;
-                    if (width && height) setNatural({ w: width, h: height });
-                  }}
                 />
                 <View pointerEvents="none" style={styles.grid}>
                   <View style={[styles.gridLine, styles.v1]} />
@@ -187,8 +191,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#1e293b',
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#14b8a6',
   },
