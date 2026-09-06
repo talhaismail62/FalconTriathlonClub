@@ -12,18 +12,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Region } from 'react-native-maps';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { GradientButton } from '@/components/UI';
 
-const DEFAULT_REGION: Region = {
-  latitude: 31.5204,
-  longitude: 74.3587,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
-};
-
-/** Delay MapView until the modal animation has started — avoids native crashes on remount. */
-const MAP_MOUNT_DELAY_MS = 200;
+const DEFAULT = { latitude: 31.5204, longitude: 74.3587 };
 
 export type MapCoords = { latitude: number; longitude: number };
 
@@ -35,6 +27,51 @@ type Props = {
   onSuggestLocationName?: (name: string) => void;
 };
 
+/** OSM/Leaflet HTML map — avoids Android Google Maps SDK crashes when no API key is set. */
+function buildMapHtml(lat: number, lon: number): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body, #map { margin:0; padding:0; height:100%; width:100%; background:#f8fafc; }
+    .leaflet-control-attribution { font-size: 10px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map', { zoomControl: true }).setView([${lat}, ${lon}], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+    var marker = null;
+    function setPin(lat, lng, fly) {
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([lat, lng]).addTo(map);
+      if (fly) map.flyTo([lat, lng], Math.max(map.getZoom(), 15), { duration: 0.6 });
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'select', latitude: lat, longitude: lng }));
+      }
+    }
+    map.on('click', function (e) {
+      setPin(e.latlng.lat, e.latlng.lng, false);
+    });
+    window.setMapLocation = function (lat, lng) {
+      setPin(lat, lng, true);
+    };
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
+    }
+  </script>
+</body>
+</html>`;
+}
+
 export default function LocationMapPickerModal({
   visible,
   locationName,
@@ -42,23 +79,23 @@ export default function LocationMapPickerModal({
   onConfirm,
   onSuggestLocationName,
 }: Props) {
-  const mapRef = useRef<MapView | null>(null);
+  const webRef = useRef<WebView>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCoords, setSelectedCoords] = useState<MapCoords | null>(null);
-  const [mapMounted, setMapMounted] = useState(false);
+  const [webReady, setWebReady] = useState(false);
+  const [mapHtml, setMapHtml] = useState(() => buildMapHtml(DEFAULT.latitude, DEFAULT.longitude));
 
   useEffect(() => {
     if (!visible) {
-      setMapMounted(false);
       setSearchQuery('');
       setSelectedCoords(null);
       setIsSearching(false);
+      setWebReady(false);
       return;
     }
-
-    const timer = setTimeout(() => setMapMounted(true), MAP_MOUNT_DELAY_MS);
-    return () => clearTimeout(timer);
+    // Fresh HTML each open so Leaflet remounts cleanly after the parent modal closes.
+    setMapHtml(buildMapHtml(DEFAULT.latitude, DEFAULT.longitude));
   }, [visible]);
 
   const handleMapSearch = async () => {
@@ -69,7 +106,7 @@ export default function LocationMapPickerModal({
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}`,
-        { headers: { 'User-Agent': 'ExpoClubApp/1.0' } }
+        { headers: { 'User-Agent': 'FalconTriathlonClub/1.0' } }
       );
       const results = await response.json();
 
@@ -80,14 +117,8 @@ export default function LocationMapPickerModal({
         const newCoords = { latitude: lat, longitude: lon };
         setSelectedCoords(newCoords);
 
-        mapRef.current?.animateToRegion(
-          {
-            latitude: lat,
-            longitude: lon,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          },
-          1000
+        webRef.current?.injectJavaScript(
+          `window.setMapLocation(${lat}, ${lon}); true;`
         );
 
         if (!locationName.trim() && onSuggestLocationName) {
@@ -101,6 +132,22 @@ export default function LocationMapPickerModal({
       Alert.alert('Search Error', 'Could not fetch place coordinates.');
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const onWebMessage = (event: WebViewMessageEvent) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data?.type === 'ready') {
+        setWebReady(true);
+      } else if (data?.type === 'select') {
+        setSelectedCoords({
+          latitude: Number(data.latitude),
+          longitude: Number(data.longitude),
+        });
+      }
+    } catch {
+      // ignore malformed messages
     }
   };
 
@@ -141,22 +188,27 @@ export default function LocationMapPickerModal({
           </TouchableOpacity>
         </View>
 
-        {mapMounted ? (
-          <MapView
-            ref={mapRef}
-            style={styles.mapView}
-            initialRegion={DEFAULT_REGION}
-            onPress={(e) => setSelectedCoords(e.nativeEvent.coordinate)}
-          >
-            {selectedCoords && (
-              <Marker coordinate={selectedCoords} title={locationName || 'Selected Venue'} />
-            )}
-          </MapView>
-        ) : (
-          <View style={styles.mapPlaceholder}>
-            <ActivityIndicator size="large" color="#0d9488" />
-          </View>
-        )}
+        <View style={styles.mapWrap}>
+          {visible ? (
+            <WebView
+              key={mapHtml.slice(0, 40)}
+              ref={webRef}
+              originWhitelist={['*']}
+              source={{ html: mapHtml }}
+              style={styles.mapView}
+              onMessage={onWebMessage}
+              javaScriptEnabled
+              domStorageEnabled
+              setSupportMultipleWindows={false}
+              mixedContentMode="always"
+            />
+          ) : null}
+          {!webReady && (
+            <View style={styles.mapPlaceholder}>
+              <ActivityIndicator size="large" color="#0d9488" />
+            </View>
+          )}
+        </View>
 
         <View style={styles.footer}>
           <GradientButton
@@ -209,10 +261,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  mapView: { flex: 1, width: '100%' },
+  mapWrap: { flex: 1, width: '100%' },
+  mapView: { flex: 1, width: '100%', backgroundColor: '#f8fafc' },
   mapPlaceholder: {
-    flex: 1,
-    width: '100%',
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8fafc',

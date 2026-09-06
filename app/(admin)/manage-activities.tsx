@@ -94,13 +94,15 @@ export default function ManageActivities() {
   }
 
   function openMapPicker() {
+    // Close the form modal first and wait for its dismiss animation.
+    // Opening Map/WebView while another Modal is still animating can kill the app on Android.
     setModalVisible(false);
-    setShowMapModal(true);
+    setTimeout(() => setShowMapModal(true), 450);
   }
 
   function closeMapPicker() {
     setShowMapModal(false);
-    setModalVisible(true);
+    setTimeout(() => setModalVisible(true), 300);
   }
 
   function confirmMapSelection(coords: MapCoords) {
@@ -110,7 +112,7 @@ export default function ManageActivities() {
       setLocationName('Pinned Location');
     }
     setShowMapModal(false);
-    setModalVisible(true);
+    setTimeout(() => setModalVisible(true), 300);
   }
 
   function openCreate() {
