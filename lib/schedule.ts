@@ -70,18 +70,6 @@ export function getActivityDate(activity: DatedActivity, now = new Date()): Date
   return candidate;
 }
 
-/** True while the activity's scheduled moment is still in the future. */
-export function isUpcomingActivity(activity: DatedActivity, now = new Date()): boolean {
-  const at = getActivityDate(activity, now);
-  return !!at && at.getTime() >= now.getTime();
-}
-
-/** True after the scheduled moment has passed. */
-export function isPastActivity(activity: DatedActivity, now = new Date()): boolean {
-  const at = getActivityDate(activity, now);
-  return !!at && at.getTime() < now.getTime();
-}
-
 export function sortActivitiesSoonestFirst<T extends DatedActivity>(
   activities: T[],
   now = new Date()
@@ -188,7 +176,43 @@ export function expiresAtFromDurationHours(
 }
 
 export function combineDateAndTime(datePart: Date, timePart: Date): Date {
-  const combined = new Date(datePart);
-  combined.setHours(timePart.getHours(), timePart.getMinutes(), 0, 0);
-  return combined;
+  // Use local Y/M/D + local H:M so Android/iOS date pickers that use UTC
+  // midnight don't shift the calendar day when hours are applied.
+  return new Date(
+    datePart.getFullYear(),
+    datePart.getMonth(),
+    datePart.getDate(),
+    timePart.getHours(),
+    timePart.getMinutes(),
+    0,
+    0
+  );
+}
+
+/** Local calendar day key, e.g. "2026-9-6". */
+function localDayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+/**
+ * Upcoming through the activity's local calendar day; archived once that day
+ * has ended (local midnight). If you also want same-day sessions to drop after
+ * their start time, we treat a passed start time on a past day as archived via
+ * day key, and on the same day we hide once the start time has passed.
+ */
+export function isUpcomingActivity(activity: DatedActivity, now = new Date()): boolean {
+  const at = getActivityDate(activity, now);
+  if (!at) return false;
+
+  const dayCmp = localDayKey(at).localeCompare(localDayKey(now), undefined, { numeric: true });
+  if (dayCmp > 0) return true; // future calendar day
+  if (dayCmp < 0) return false; // past calendar day
+  // Same calendar day: keep only until the scheduled start time has passed.
+  return at.getTime() >= now.getTime();
+}
+
+export function isPastActivity(activity: DatedActivity, now = new Date()): boolean {
+  const at = getActivityDate(activity, now);
+  if (!at) return false;
+  return !isUpcomingActivity(activity, now);
 }
