@@ -5,10 +5,11 @@
 
 create table if not exists public.weekly_activities (
   id          uuid primary key default gen_random_uuid(),
-  day         text not null,           -- 'Monday' … 'Sunday'
+  day         text not null,           -- 'Monday' … 'Sunday' (derived from activity_at)
   title       text not null,
   description text not null,
-  time        text,                    -- optional, e.g. '6:00 AM - 7:30 AM'
+  time        text,                    -- e.g. '6:00 AM'
+  activity_at timestamptz,             -- concrete date+time; past rows are archived
   created_at  timestamptz not null default now()
 );
 

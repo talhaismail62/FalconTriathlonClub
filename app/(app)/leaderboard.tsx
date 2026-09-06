@@ -16,9 +16,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SCREEN_GRADIENT } from '@/components/UI';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/lib/supabase';
 
-//const API_URL = (process.env.EXPO_PUBLIC_LEADERBOARD_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
+const API_URL = (process.env.EXPO_PUBLIC_LEADERBOARD_API_URL ?? 'http://localhost:8000').replace(
+  /\/$/,
+  ''
+);
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -116,31 +118,16 @@ export default function LeaderboardTab() {
 
   const fetchBoard = useCallback(async () => {
     setError(null);
-    
+    const url =
+      scope === 'monthly'
+        ? `${API_URL}/leaderboard?month=${month}&year=${year}`
+        : `${API_URL}/Yleaderboard?year=${year}`;
+
     try {
-      // 1. Query Supabase directly based on monthly or yearly scope
-      let query = supabase.from(
-        scope === 'monthly' ? 'monthly_leaderboard' : 'yearly_leaderboard'
-      ).select('*');
-
-      if (scope === 'monthly') {
-        query = query.eq('year', year).eq('month', month);
-      } else {
-        query = query.eq('year', year);
-      }
-
-      // Order by score descending, just like the old Python backend did
-      query = query.order('score', { ascending: false });
-
-      const { data, error: dbError } = await query;
-
-      if (dbError) throw new Error(dbError.message);
-
-      // 2. Split the results into male and female arrays
-      const normalised: Board = {
-        male: (data || []).filter((r: any) => r.gender === 'male'),
-        female: (data || []).filter((r: any) => r.gender === 'female'),
-      };
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+      const json = await res.json();
+      const normalised = normalise(json);
 
       const hadStaleData = showingCachedRef.current;
 
@@ -164,7 +151,7 @@ export default function LeaderboardTab() {
     } catch (e: any) {
       setError(
         e?.message === 'Network request failed'
-          ? 'Could not reach the database. Check your internet connection.'
+          ? `Could not reach the leaderboard server at ${API_URL}. Is it running?`
           : e?.message ?? 'Failed to load leaderboard.'
       );
     }

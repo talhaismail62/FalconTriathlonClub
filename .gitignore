@@ -37,3 +37,6 @@ yarn-error.*
 
 # Logs
 *.log
+
+# Local tooling / caches
+.freebuff/

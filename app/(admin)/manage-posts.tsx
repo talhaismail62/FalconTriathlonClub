@@ -20,6 +20,13 @@ import { useAuth } from '@/context/AuthContext';
 import { CardContainer, GradientButton, SCREEN_GRADIENT } from '@/components/UI';
 import LocationMapPickerModal, { MapCoords } from '@/components/LocationMapPickerModal';
 import { openMapLocation } from '@/lib/location';
+import {
+  ANNOUNCEMENT_DURATION_OPTIONS,
+  AnnouncementDurationHours,
+  expiresAtFromDurationHours,
+  isActiveAnnouncement,
+  sortAnnouncementsNewestFirst,
+} from '@/lib/schedule';
 
 interface Post {
   id: string;
@@ -31,6 +38,8 @@ interface Post {
   time?: string;
   location_name?: string | null;
   location_url?: string | null;
+  created_at?: string | null;
+  expires_at?: string | null;
 }
 
 export default function ManagePosts() {
@@ -45,6 +54,7 @@ export default function ManagePosts() {
 
   const [locationName, setLocationName] = useState('');
   const [locationUrl, setLocationUrl] = useState('');
+  const [durationHours, setDurationHours] = useState<AnnouncementDurationHours>(24);
 
   const [showMapModal, setShowMapModal] = useState(false);
 
@@ -54,7 +64,7 @@ export default function ManagePosts() {
 
   async function fetchPosts() {
     const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
-    setPosts(data || []);
+    setPosts(sortAnnouncementsNewestFirst((data || []) as Post[]));
     setLoading(false);
   }
 
@@ -108,6 +118,7 @@ export default function ManagePosts() {
       is_weekly_activity: false,
       location_name: locationName.trim() || null,
       location_url: locationUrl.trim() || null,
+      expires_at: expiresAtFromDurationHours(durationHours),
     });
 
     if (error) {
@@ -118,6 +129,7 @@ export default function ManagePosts() {
       setImageUri(null);
       setLocationName('');
       setLocationUrl('');
+      setDurationHours(24);
       fetchPosts();
     }
     setLoading(false);
@@ -189,6 +201,29 @@ export default function ManagePosts() {
                 </Text>
               </TouchableOpacity>
 
+              <Text style={styles.durationLabel}>Show for</Text>
+              <View style={styles.durationRow}>
+                {ANNOUNCEMENT_DURATION_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.hours}
+                    style={[
+                      styles.durationChip,
+                      durationHours === option.hours && styles.durationChipActive,
+                    ]}
+                    onPress={() => setDurationHours(option.hours)}
+                  >
+                    <Text
+                      style={[
+                        styles.durationChipText,
+                        durationHours === option.hours && styles.durationChipTextActive,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
                 <Text style={{ color: imageUri ? '#0d9488' : '#94a3b8', fontWeight: '600' }}>
                   {imageUri ? 'Image Selected ✓' : 'Attach Image (Optional)'}
@@ -216,8 +251,22 @@ export default function ManagePosts() {
 
               <View style={styles.badgeRow}>
                 <Text style={styles.postTypeBadge}>
-                  {item.is_weekly_activity ? '📅 Weekly Activity' : '📰 Regular Post'}
+                  {item.is_weekly_activity ? '📅 Weekly Activity' : '📰 Announcement'}
                 </Text>
+                {!item.is_weekly_activity && (
+                  <Text
+                    style={[
+                      styles.timeBadge,
+                      !isActiveAnnouncement(item) && styles.expiredBadge,
+                    ]}
+                  >
+                    {isActiveAnnouncement(item)
+                      ? item.expires_at
+                        ? `Expires ${new Date(item.expires_at).toLocaleString()}`
+                        : 'No expiry'
+                      : 'Expired'}
+                  </Text>
+                )}
                 {item.is_weekly_activity && item.day && (
                   <Text style={styles.timeBadge}>
                     {item.day} at {item.time}
@@ -320,6 +369,27 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: 'hidden',
   },
+  expiredBadge: {
+    color: '#b91c1c',
+    backgroundColor: '#fee2e2',
+  },
+  durationLabel: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  durationRow: { flexDirection: 'row', gap: 8 },
+  durationChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+  },
+  durationChipActive: {
+    backgroundColor: '#0d9488',
+    borderColor: '#0d9488',
+  },
+  durationChipText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  durationChipTextActive: { color: '#ffffff' },
   locationButton: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -16,7 +16,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SCREEN_GRADIENT, SPACE } from '@/components/UI';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +25,15 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
 import { openMapLocation } from '@/lib/location';
+import NotificationBell from '@/components/NotificationBell';
+import {
+  formatCountdownFromActivity,
+  isActiveAnnouncement,
+  isUpcomingActivity,
+  sortActivitiesSoonestFirst,
+  sortAnnouncementsNewestFirst,
+  weekdayNameFromDate,
+} from '@/lib/schedule';
 
 interface Post {
   id: string;
@@ -34,6 +43,7 @@ interface Post {
   location_name: string | null;
   location_url: string | null;
   created_at: string;
+  expires_at?: string | null;
 }
 
 interface Activity {
@@ -43,6 +53,7 @@ interface Activity {
   time: string;
   location_name: string | null;
   location_url: string | null;
+  activity_at?: string | null;
 }
 
 interface JerseySizeEntry {
@@ -91,8 +102,6 @@ const FACEBOOK_URL = 'https://www.facebook.com/falcontriathlonclub';
 
 const JERSEY_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const RSVP_OPTIONS: Rsvp['status'][] = ['Going', 'Not Going', 'Maybe'];
-
-const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 // How many sections of each kind the home page previews before "View all".
 const POST_PREVIEW_COUNT = 3;
@@ -197,39 +206,9 @@ function formatPostTime(dateString: string): string {
   }
 }
 
-// Activities recur weekly, so "how soon" is the distance to the next matching weekday.
-// Returns null for a day we don't recognise, so the badge can be skipped entirely.
-function daysUntilNext(day: string): number | null {
-  const target = DAYS_ORDER.indexOf(day);
-  if (target < 0) return null;
-
-  // DAYS_ORDER is Monday-first; getDay() is Sunday-first.
-  const today = (new Date().getDay() + 6) % 7;
-  return (target - today + 7) % 7;
-}
-
-function formatCountdown(day: string): string | null {
-  const diff = daysUntilNext(day);
-  if (diff === null) return null;
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  return `In ${diff} days`;
-}
-
-// Orders activities by how soon they next occur rather than by fixed weekday,
-// so the top of the list is always what's coming up next.
-function sortByNextOccurrence(activities: Activity[]): Activity[] {
-  return [...activities].sort((a, b) => {
-    const aDiff = daysUntilNext(a.day);
-    const bDiff = daysUntilNext(b.day);
-    if (aDiff === null) return 1;
-    if (bDiff === null) return -1;
-    return aDiff - bDiff;
-  });
-}
-
 export default function HomeTab() {
   const router = useRouter();
+  const { openBills } = useLocalSearchParams<{ openBills?: string }>();
   const { session } = useAuth();
   const email = session?.user?.email ?? '';
   const insets = useSafeAreaInsets();
@@ -284,6 +263,15 @@ export default function HomeTab() {
     }, [])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (openBills === '1') {
+        setBillsModalVisible(true);
+        router.setParams({ openBills: undefined });
+      }
+    }, [openBills, router])
+  );
+
   async function checkAdminStatus() {
     if (!email) {
       setIsAdmin(false);
@@ -301,17 +289,19 @@ export default function HomeTab() {
     const [postsResult, activitiesResult] = await Promise.all([
       supabase
         .from('posts')
-        .select('id, title, description, image_url, location_name, location_url, created_at')
+        .select('*')
         .eq('is_weekly_activity', false)
         .order('created_at', { ascending: false }),
-      supabase.from('weekly_activities').select('id, day, title, time, location_name, location_url'),
+      supabase.from('weekly_activities').select('*'),
     ]);
 
     if (!postsResult.error && postsResult.data) {
-      setPosts(postsResult.data as Post[]);
+      const active = (postsResult.data as Post[]).filter((p) => isActiveAnnouncement(p));
+      setPosts(sortAnnouncementsNewestFirst(active));
     }
     if (!activitiesResult.error && activitiesResult.data) {
-      setActivities(sortByNextOccurrence(activitiesResult.data as Activity[]));
+      const upcoming = (activitiesResult.data as Activity[]).filter((a) => isUpcomingActivity(a));
+      setActivities(sortActivitiesSoonestFirst(upcoming));
     }
 
     setLoading(false);
@@ -784,8 +774,11 @@ export default function HomeTab() {
   }
 
   function renderActivity(item: Activity, isLast: boolean) {
-    const countdown = formatCountdown(item.day);
-    const dayLabel = (item.day || '').slice(0, 3).toUpperCase();
+    const countdown = formatCountdownFromActivity(item);
+    const daySource = item.activity_at
+      ? weekdayNameFromDate(new Date(item.activity_at))
+      : item.day || '';
+    const dayLabel = daySource.slice(0, 3).toUpperCase();
     const isExpanded = expandedActivityId === item.id;
     const rsvps = rsvpsByActivity[item.id] || [];
     const myVote = rsvps.find((r) => r.email.toLowerCase() === email.toLowerCase())?.status;
@@ -794,7 +787,6 @@ export default function HomeTab() {
       <View key={item.id}>
         <TouchableOpacity activeOpacity={0.8} onPress={() => toggleActivityExpand(item.id)}>
           <View style={styles.activityRow}>
-            {/* Day tile stands in for the calendar tile — activities recur weekly */}
             <View style={styles.dayTile}>
               <Text style={styles.dayTileText}>{dayLabel || '—'}</Text>
             </View>
@@ -969,6 +961,11 @@ export default function HomeTab() {
       style={styles.container}
     >
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
+        <View style={styles.homeHeaderRow}>
+          <View style={styles.homeHeaderSpacer} />
+          <NotificationBell />
+        </View>
+
         {loading ? (
           <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 50 }} />
         ) : (
@@ -1544,6 +1541,14 @@ export default function HomeTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
+  homeHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: SPACE.screen,
+    paddingBottom: 4,
+  },
+  homeHeaderSpacer: { flex: 1 },
   scrollContent: {
     paddingHorizontal: SPACE.screen,
     paddingTop: 0,

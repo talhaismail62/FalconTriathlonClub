@@ -3,20 +3,17 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { SCREEN_GRADIENT } from '@/components/UI';
-
-interface AppNotification {
-  id: string;
-  title: string;
-  body: string;
-  type: string;
-  read_at: string | null;
-  created_at: string;
-}
+import {
+  AppNotification,
+  navigateForNotification,
+} from '@/lib/notificationNavigation';
 
 export default function NotificationsScreen() {
+  const router = useRouter();
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -38,24 +35,32 @@ export default function NotificationsScreen() {
 
     if (!error && data) {
       setNotifications(data as AppNotification[]);
-      
-      // Auto-mark all as read after 2 seconds of viewing the screen
-      const unreadIds = data.filter(n => !n.read_at).map(n => n.id);
-      if (unreadIds.length > 0) {
-        setTimeout(() => markAsRead(unreadIds), 2000);
-      }
     }
     setLoading(false);
     setRefreshing(false);
   }
 
   async function markAsRead(ids: string[]) {
-    if (!session?.user?.id) return;
-    
-    await supabase
+    if (!session?.user?.id || ids.length === 0) return;
+
+    const readAt = new Date().toISOString();
+    const { error } = await supabase
       .from('notifications')
-      .update({ read_at: new Date().toISOString() })
+      .update({ read_at: readAt })
       .in('id', ids);
+
+    if (!error) {
+      setNotifications((prev) =>
+        prev.map((n) => (ids.includes(n.id) ? { ...n, read_at: readAt } : n))
+      );
+    }
+  }
+
+  async function handleNotificationPress(item: AppNotification) {
+    if (!item.read_at) {
+      await markAsRead([item.id]);
+    }
+    navigateForNotification(router, item);
   }
 
   const onRefresh = () => {
@@ -82,9 +87,10 @@ export default function NotificationsScreen() {
     const iconName = item.type === 'bill' ? 'cash-outline' : 'megaphone-outline';
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.notifCard, isUnread && styles.unreadCard]}
         activeOpacity={0.8}
+        onPress={() => handleNotificationPress(item)}
       >
         <View style={styles.iconContainer}>
           <Ionicons name={iconName} size={24} color={isUnread ? '#0d9488' : '#94a3b8'} />
@@ -108,7 +114,17 @@ export default function NotificationsScreen() {
       style={styles.container}
     >
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
-        <Text style={styles.heading}>Notifications</Text>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={24} color="#0f172a" />
+          </TouchableOpacity>
+          <Text style={styles.heading}>Notifications</Text>
+        </View>
 
         {loading ? (
           <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 50 }} />
@@ -138,7 +154,28 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', paddingHorizontal: 16, paddingBottom: 12 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heading: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'left',
+  },
   listContent: { paddingHorizontal: 16, paddingBottom: 110 },
   notifCard: {
     flexDirection: 'row',

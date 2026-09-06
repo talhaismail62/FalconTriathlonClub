@@ -7,7 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
-  TouchableOpacity
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +16,13 @@ import { CardContainer, SCREEN_GRADIENT } from '@/components/UI';
 import { Ionicons } from '@expo/vector-icons';
 import { openMapLocation } from '@/lib/location';
 import { useAuth } from '@/context/AuthContext';
+import {
+  formatActivityWhen,
+  isPastActivity,
+  isUpcomingActivity,
+  sortActivitiesLatestFirst,
+  sortActivitiesSoonestFirst,
+} from '@/lib/schedule';
 
 interface Activity {
   id: string;
@@ -27,6 +34,7 @@ interface Activity {
   location_url: string | null;
   image_url: string | null;
   created_at: string;
+  activity_at?: string | null;
 }
 
 interface Rsvp {
@@ -36,8 +44,9 @@ interface Rsvp {
   status: 'Going' | 'Not Going' | 'Maybe';
 }
 
-const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const RSVP_OPTIONS: Rsvp['status'][] = ['Going', 'Not Going', 'Maybe'];
+
+type ActivitiesTabKey = 'upcoming' | 'archived';
 
 function formatActivityAge(dateString: string): string {
   try {
@@ -65,7 +74,9 @@ export default function ActivitiesTab() {
   const email = session?.user?.email ?? '';
   const insets = useSafeAreaInsets();
 
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [upcoming, setUpcoming] = useState<Activity[]>([]);
+  const [archived, setArchived] = useState<Activity[]>([]);
+  const [tab, setTab] = useState<ActivitiesTabKey>('upcoming');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -79,16 +90,17 @@ export default function ActivitiesTab() {
   );
 
   async function fetchActivities() {
-    // Defect #26: Fetch from weekly_activities instead of posts
-    const { data, error } = await supabase
-      .from('weekly_activities')
-      .select('*');
+    const { data, error } = await supabase.from('weekly_activities').select('*');
 
-    if (!error && data) {
-      const sorted = (data as Activity[]).sort((a, b) =>
-        DAYS_ORDER.indexOf(a.day) - DAYS_ORDER.indexOf(b.day)
-      );
-      setActivities(sorted);
+    if (error) {
+      console.warn('[activities] fetch failed:', error.message);
+      setUpcoming([]);
+      setArchived([]);
+    } else if (data) {
+      const rows = data as Activity[];
+      const now = new Date();
+      setUpcoming(sortActivitiesSoonestFirst(rows.filter((a) => isUpcomingActivity(a, now))));
+      setArchived(sortActivitiesLatestFirst(rows.filter((a) => isPastActivity(a, now))));
     }
     setLoading(false);
     setRefreshing(false);
@@ -167,18 +179,14 @@ export default function ActivitiesTab() {
     const isExpanded = expandedId === item.id;
     const rsvps = rsvpsByActivity[item.id] || [];
     const myVote = rsvps.find((r) => r.email.toLowerCase() === email.toLowerCase())?.status;
+    const whenLabel = formatActivityWhen(item);
+    const isArchived = tab === 'archived';
 
     return (
       <CardContainer>
         <TouchableOpacity activeOpacity={0.8} onPress={() => toggleExpand(item.id)}>
           <View style={styles.cardHeader}>
-            <Text style={styles.dayBadge}>{item.day || 'Scheduled'}</Text>
-            {item.time ? (
-              <View style={styles.scheduleRow}>
-                <Ionicons name="time" size={14} color="#0d9488" />
-                <Text style={styles.scheduleText}>{item.time}</Text>
-              </View>
-            ) : null}
+            <Text style={[styles.dayBadge, isArchived && styles.dayBadgeArchived]}>{whenLabel}</Text>
           </View>
 
           <Text style={styles.activityTitle}>{item.title}</Text>
@@ -205,51 +213,59 @@ export default function ActivitiesTab() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.expandToggle} onPress={() => toggleExpand(item.id)} activeOpacity={0.7}>
-          <Text style={styles.expandToggleText}>
-            {isExpanded ? 'Hide RSVPs' : `RSVP${rsvps.length > 0 ? ` · ${rsvps.length}` : ''}`}
-          </Text>
-          <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#0d9488" />
-        </TouchableOpacity>
+        {!isArchived && (
+          <>
+            <TouchableOpacity style={styles.expandToggle} onPress={() => toggleExpand(item.id)} activeOpacity={0.7}>
+              <Text style={styles.expandToggleText}>
+                {isExpanded ? 'Hide RSVPs' : `RSVP${rsvps.length > 0 ? ` · ${rsvps.length}` : ''}`}
+              </Text>
+              <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#0d9488" />
+            </TouchableOpacity>
 
-        {isExpanded && (
-          <View style={styles.rsvpSection}>
-            <View style={styles.rsvpOptionRow}>
-              {RSVP_OPTIONS.map((option) => (
-                <TouchableOpacity
-                  key={option}
-                  style={[styles.rsvpChip, myVote === option && styles.rsvpChipActive]}
-                  onPress={() => handleVote(item.id, option)}
-                  disabled={isSavingRsvp}
-                >
-                  <Text style={[styles.rsvpChipText, myVote === option && styles.rsvpChipTextActive]}>
-                    {option}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {isExpanded && (
+              <View style={styles.rsvpSection}>
+                <View style={styles.rsvpOptionRow}>
+                  {RSVP_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.rsvpChip, myVote === option && styles.rsvpChipActive]}
+                      onPress={() => handleVote(item.id, option)}
+                      disabled={isSavingRsvp}
+                    >
+                      <Text style={[styles.rsvpChipText, myVote === option && styles.rsvpChipTextActive]}>
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-            {rsvps.length === 0 ? (
-              <Text style={styles.rsvpEmptyText}>No one has responded yet.</Text>
-            ) : (
-              RSVP_OPTIONS.map((status) => {
-                const votersForStatus = rsvps.filter((r) => r.status === status);
-                if (votersForStatus.length === 0) return null;
-                return (
-                  <View key={status} style={styles.rsvpGroup}>
-                    <Text style={styles.rsvpGroupTitle}>{status} ({votersForStatus.length})</Text>
-                    <Text style={styles.rsvpGroupNames}>
-                      {votersForStatus.map((r) => r.name || r.email).join(', ')}
-                    </Text>
-                  </View>
-                );
-              })
+                {rsvps.length === 0 ? (
+                  <Text style={styles.rsvpEmptyText}>No one has responded yet.</Text>
+                ) : (
+                  RSVP_OPTIONS.map((status) => {
+                    const votersForStatus = rsvps.filter((r) => r.status === status);
+                    if (votersForStatus.length === 0) return null;
+                    return (
+                      <View key={status} style={styles.rsvpGroup}>
+                        <Text style={styles.rsvpGroupTitle}>
+                          {status} ({votersForStatus.length})
+                        </Text>
+                        <Text style={styles.rsvpGroupNames}>
+                          {votersForStatus.map((r) => r.name || r.email).join(', ')}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
             )}
-          </View>
+          </>
         )}
       </CardContainer>
     );
   }
+
+  const listData = tab === 'upcoming' ? upcoming : archived;
 
   return (
     <LinearGradient
@@ -260,13 +276,32 @@ export default function ActivitiesTab() {
       style={styles.container}
     >
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 10 }]} edges={['bottom']}>
-        <Text style={styles.heading}>Weekly Activities</Text>
+        <Text style={styles.heading}>Activities</Text>
+
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tabChip, tab === 'upcoming' && styles.tabChipActive]}
+            onPress={() => setTab('upcoming')}
+          >
+            <Text style={[styles.tabChipText, tab === 'upcoming' && styles.tabChipTextActive]}>
+              Upcoming ({upcoming.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabChip, tab === 'archived' && styles.tabChipActive]}
+            onPress={() => setTab('archived')}
+          >
+            <Text style={[styles.tabChipText, tab === 'archived' && styles.tabChipTextActive]}>
+              Archived ({archived.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {loading ? (
           <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 50 }} />
         ) : (
           <FlatList
-            data={activities}
+            data={listData}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderActivity}
             contentContainerStyle={styles.listContent}
@@ -275,7 +310,9 @@ export default function ActivitiesTab() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0d9488']} />
             }
             ListEmptyComponent={
-              <Text style={styles.emptyText}>No activities scheduled for this week.</Text>
+              <Text style={styles.emptyText}>
+                {tab === 'upcoming' ? 'No upcoming activities.' : 'No archived activities yet.'}
+              </Text>
             }
           />
         )}
@@ -287,14 +324,62 @@ export default function ActivitiesTab() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  heading: { fontSize: 28, fontWeight: '800', color: '#0f172a', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 12 },
+  heading: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0f172a',
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 12,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  tabChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  tabChipActive: {
+    backgroundColor: '#0d9488',
+    borderColor: '#0d9488',
+  },
+  tabChipText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  tabChipTextActive: { color: '#ffffff' },
   listContent: { paddingHorizontal: 16, paddingBottom: 110 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  dayBadge: { fontSize: 11, fontWeight: '800', color: '#ffffff', backgroundColor: '#0d9488', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', textTransform: 'uppercase' },
-  scheduleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  scheduleText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dayBadge: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+    backgroundColor: '#0d9488',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
+    textTransform: 'uppercase',
+  },
+  dayBadgeArchived: { backgroundColor: '#94a3b8' },
   activityTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a' },
-  creationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 8 },
+  creationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    marginBottom: 8,
+  },
   creationText: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
   activityDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
   locationButton: {
@@ -344,5 +429,11 @@ const styles = StyleSheet.create({
   rsvpGroup: { marginBottom: 8 },
   rsvpGroupTitle: { fontSize: 12, fontWeight: '700', color: '#0f172a', marginBottom: 2 },
   rsvpGroupNames: { fontSize: 13, color: '#64748b', lineHeight: 18 },
-  emptyText: { textAlign: 'center', color: '#64748b', marginTop: 50, fontSize: 16, fontWeight: '600' },
+  emptyText: {
+    textAlign: 'center',
+    color: '#64748b',
+    marginTop: 50,
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });

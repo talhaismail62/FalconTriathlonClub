@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_BAR_HEIGHT, tabBarBottomOffset } from '@/components/tabBarLayout';
+import NotificationNavigationHandler from '@/components/NotificationNavigationHandler';
 
 export default function AppLayout() {
   const { session, loading, isRecovering } = useAuth();
@@ -20,6 +21,8 @@ export default function AppLayout() {
   const barBottom = tabBarBottomOffset(insets);
 
   return (
+    <>
+    <NotificationNavigationHandler />
     <Tabs
       screenOptions={{
         headerShown: false, // Removed App Bar
@@ -91,9 +94,16 @@ export default function AppLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          href: null,
+        }}
+      />
 
       {/* DO NOT add map, merchandise, or registration here.
           Their files were deleted, so Expo Router won't look for them. */}
     </Tabs>
+    </>
   );
 }

@@ -22,16 +22,19 @@ const AuthContext = createContext<AuthContextValue>({
   endRecovery: () => {},
 });
 
-// Configure how notifications show when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true, // Added to fix TS error
-    shouldShowList: true,   // Added to fix TS error
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+} catch (error) {
+  console.warn('Push notification handler unavailable:', error);
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -41,31 +44,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pushTokenRef = useRef<string | null>(null);
 
   async function registerForPushNotifications(userId: string) {
-    if (!Device.isDevice) return; // Push notifications don't work on simulators
+    if (!Device.isDevice) return;
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') return;
+
+      const token = (
+        await Notifications.getExpoPushTokenAsync({
+          projectId: '9dc4271a-acd9-43fb-8270-dce455ba4b4b',
+        })
+      ).data;
+
+      pushTokenRef.current = token;
+
+      await supabase.from('push_tokens').upsert(
+        {
+          user_id: userId,
+          token: token,
+        },
+        { onConflict: 'token' }
+      );
+    } catch (error) {
+      console.warn('Push token registration skipped:', error);
     }
-    if (finalStatus !== 'granted') return;
-
-    const token = (await Notifications.getExpoPushTokenAsync({
-      projectId: '9dc4271a-acd9-43fb-8270-dce455ba4b4b', // From your app.json
-    })).data;
-
-    pushTokenRef.current = token;
-
-    await supabase.from('push_tokens').upsert({
-      user_id: userId,
-      token: token,
-    }, { onConflict: 'token' });
   }
 
   async function unregisterPushNotifications() {
-    if (pushTokenRef.current) {
+    if (!pushTokenRef.current) return;
+
+    try {
       await supabase.from('push_tokens').delete().eq('token', pushTokenRef.current);
+    } catch (error) {
+      console.warn('Push token unregister failed:', error);
+    } finally {
       pushTokenRef.current = null;
     }
   }

@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.talha62ismailsteam.ftcapp",
+      "package": "com.falcontriathlonclub.app",
       "config": {
         "googleMaps": {
           "apiKey": ""

@@ -16,11 +16,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import { CardContainer, SCREEN_GRADIENT } from '@/components/UI';
 import AppTimePickerModal, { formatTime12h } from '@/components/AppTimePickerModal';
 import LocationMapPickerModal, { MapCoords } from '@/components/LocationMapPickerModal';
 import { openMapLocation } from '@/lib/location';
+import {
+  combineDateAndTime,
+  formatActivityWhen,
+  getActivityDate,
+  isPastActivity,
+  parseClockTime,
+  sortActivitiesSoonestFirst,
+  weekdayNameFromDate,
+} from '@/lib/schedule';
 
 interface Activity {
   id: string;
@@ -30,31 +40,24 @@ interface Activity {
   time: string | null;
   location_name: string | null;
   location_url: string | null;
+  activity_at?: string | null;
 }
 
-const DAYS_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-// Matches the format used by manage-posts.tsx so both screens store time the same way.
-function formatTime(date: Date): string {
-  return formatTime12h(date);
-}
-
-// Existing rows may hold free text ("6:00 AM - 7:30 AM"), so fall back to the
-// current time when the stored value isn't a simple clock time.
 function parseTimeToDate(value: string | null): Date {
-  const match = value?.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (!match) return new Date();
-
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const meridiem = match[3]?.toUpperCase();
-
-  if (meridiem === 'PM' && hours < 12) hours += 12;
-  if (meridiem === 'AM' && hours === 12) hours = 0;
-
+  const clock = parseClockTime(value);
   const date = new Date();
-  date.setHours(hours, minutes, 0, 0);
+  if (!clock) return date;
+  date.setHours(clock.hours, clock.minutes, 0, 0);
   return date;
+}
+
+function formatDateLabel(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export default function ManageActivities() {
@@ -65,16 +68,16 @@ export default function ManageActivities() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const [selectedDay, setSelectedDay] = useState('Monday');
+  const [activityDate, setActivityDate] = useState(new Date());
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [time, setTime] = useState('');
   const [timeValue, setTimeValue] = useState<Date>(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [locationName, setLocationName] = useState('');
   const [locationUrl, setLocationUrl] = useState('');
 
-  // Map States — never open this while the activity form modal is still visible.
   const [showMapModal, setShowMapModal] = useState(false);
 
   useEffect(() => {
@@ -85,16 +88,12 @@ export default function ManageActivities() {
     setLoading(true);
     const { data, error } = await supabase.from('weekly_activities').select('*');
     if (!error && data) {
-      const sorted = (data as Activity[]).sort(
-        (a, b) => DAYS_ORDER.indexOf(a.day) - DAYS_ORDER.indexOf(b.day)
-      );
-      setActivities(sorted);
+      setActivities(sortActivitiesSoonestFirst(data as Activity[]));
     }
     setLoading(false);
   }
 
   function openMapPicker() {
-    // Hide the form modal first so MapView is not nested under a second Modal.
     setModalVisible(false);
     setShowMapModal(true);
   }
@@ -115,12 +114,13 @@ export default function ManageActivities() {
   }
 
   function openCreate() {
+    const now = new Date();
     setEditingId(null);
-    setSelectedDay('Monday');
+    setActivityDate(now);
     setTitle('');
     setDescription('');
     setTime('');
-    setTimeValue(new Date());
+    setTimeValue(now);
     setLocationName('');
     setLocationUrl('');
     setModalVisible(true);
@@ -128,15 +128,20 @@ export default function ManageActivities() {
 
   function openEdit(item: Activity) {
     setEditingId(item.id);
-    setSelectedDay(item.day);
+    const at = getActivityDate(item) ?? new Date();
+    setActivityDate(at);
     setTitle(item.title);
     setDescription(item.description);
     setTime(item.time || '');
-    // Open the clock on the saved time rather than "now" when editing.
-    setTimeValue(parseTimeToDate(item.time));
+    setTimeValue(parseTimeToDate(item.time) || at);
     setLocationName(item.location_name || '');
     setLocationUrl(item.location_url || '');
     setModalVisible(true);
+  }
+
+  function onDateChange(_event: DateTimePickerEvent, selected?: Date) {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (selected) setActivityDate(selected);
   }
 
   async function handleSave() {
@@ -150,14 +155,22 @@ export default function ManageActivities() {
       return;
     }
 
+    const activityAt = combineDateAndTime(activityDate, timeValue);
+    // New activities must be upcoming; edits may keep/move a past archived session.
+    if (!editingId && activityAt.getTime() < Date.now() - 60_000) {
+      Alert.alert('Validation Error', 'Please pick a date and time in the future.');
+      return;
+    }
+
     setIsSubmitting(true);
     const payload = {
-      day: selectedDay,
+      day: weekdayNameFromDate(activityAt),
       title: title.trim(),
       description: description.trim(),
       time: time.trim(),
       location_name: locationName.trim() || null,
       location_url: locationUrl.trim() || null,
+      activity_at: activityAt.toISOString(),
     };
 
     try {
@@ -192,32 +205,32 @@ export default function ManageActivities() {
   }
 
   function renderActivity({ item }: { item: Activity }) {
+    const past = isPastActivity(item);
     return (
       <CardContainer>
         <View style={styles.cardHeader}>
-          <Text style={styles.dayBadge}>{item.day}</Text>
-          {item.time ? <Text style={styles.timeText}>🕒 {item.time}</Text> : null}
+          <Text style={[styles.dayBadge, past && styles.dayBadgePast]}>{formatActivityWhen(item)}</Text>
+          {past ? <Text style={styles.pastLabel}>Archived</Text> : null}
         </View>
-        <Text style={styles.activityTitle}>{item.title}</Text>
-        <Text style={styles.activityDescription}>{item.description}</Text>
+        <Text style={styles.cardTitle}>{item.title}</Text>
+        <Text style={styles.cardDescription} numberOfLines={2}>
+          {item.description}
+        </Text>
 
         {item.location_url && (
           <TouchableOpacity
-            style={styles.locationBadge}
+            style={styles.locationButton}
             onPress={() => openMapLocation(item.location_url, item.location_name || item.title)}
-            activeOpacity={0.7}
           >
-            <Text style={styles.locationBadgeText}>
-              📍 {item.location_name || 'View Location'} ↗
-            </Text>
+            <Text style={styles.locationText}>📍 {item.location_name || 'View Location'} ↗</Text>
           </TouchableOpacity>
         )}
 
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.editBtn} onPress={() => openEdit(item)}>
+        <View style={styles.cardActions}>
+          <TouchableOpacity onPress={() => openEdit(item)}>
             <Text style={styles.editText}>Edit</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
+          <TouchableOpacity onPress={() => handleDelete(item.id)}>
             <Text style={styles.deleteText}>Delete</Text>
           </TouchableOpacity>
         </View>
@@ -233,148 +246,146 @@ export default function ManageActivities() {
       end={SCREEN_GRADIENT.end}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.addButton} onPress={openCreate} activeOpacity={0.7}>
-            <Text style={styles.addButtonText}>+ Add Activity</Text>
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Manage Activities</Text>
+          <TouchableOpacity style={styles.addButton} onPress={openCreate}>
+            <Ionicons name="add" size={22} color="#ffffff" />
+            <Text style={styles.addButtonText}>Add</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 50 }} />
+          <ActivityIndicator size="large" color="#0d9488" style={{ marginTop: 40 }} />
         ) : (
           <FlatList
             data={activities}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id}
             renderItem={renderActivity}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={<Text style={styles.emptyText}>No activities scheduled yet.</Text>}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No activities yet. Tap Add to create one.</Text>
+            }
           />
         )}
-      </SafeAreaView>
 
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingId ? 'Edit Activity' : 'New Activity'}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.closeModalText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
+        <Modal visible={modalVisible} animationType="slide" transparent>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalOverlay}
+          >
+            <View style={styles.modalCard}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.modalTitle}>{editingId ? 'Edit Activity' : 'New Activity'}</Text>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Select Day</Text>
-              <View style={styles.dayPickerContainer}>
-                {DAYS_ORDER.map((day) => (
-                  <TouchableOpacity
-                    key={day}
-                    style={[styles.daySelectorChip, selectedDay === day && styles.activeDayChip]}
-                    onPress={() => setSelectedDay(day)}
-                  >
-                    <Text
-                      style={[styles.dayChipText, selectedDay === day && styles.activeDayChipText]}
-                    >
-                      {day.substring(0, 3)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Activity Title</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Swim Technique Drill"
-                placeholderTextColor="#94a3b8"
-                value={title}
-                onChangeText={setTitle}
-              />
-
-              <Text style={styles.inputLabel}>Time</Text>
-              <TouchableOpacity
-                style={styles.timePickerButton}
-                onPress={() => setShowTimePicker(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="time-outline" size={20} color="#0d9488" />
-                <Text style={[styles.timePickerText, !time && styles.timePickerPlaceholder]}>
-                  {time || 'Select a time'}
-                </Text>
-              </TouchableOpacity>
-
-              <Text style={styles.inputLabel}>Location Name (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Liberty Roundabout / Main Track"
-                placeholderTextColor="#94a3b8"
-                value={locationName}
-                onChangeText={setLocationName}
-              />
-
-              {/* Map Trigger — closes form modal first to avoid stacked Modals + MapView crash */}
-              <TouchableOpacity style={styles.mapTriggerButton} onPress={openMapPicker}>
-                <Ionicons name="map-outline" size={20} color="#0d9488" />
-                <Text style={styles.mapTriggerText}>
-                  {locationUrl ? "Location Selected ✓ (Tap to Change)" : "📍 Search & Select Location on Map"}
-                </Text>
-              </TouchableOpacity>
-
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Provide running loops, track distances, or coach information..."
-                placeholderTextColor="#94a3b8"
-                multiline={true}
-                numberOfLines={4}
-                value={description}
-                onChangeText={setDescription}
-              />
-
-              <TouchableOpacity
-                style={[styles.submitButton, isSubmitting && styles.disabledButton]}
-                onPress={handleSave}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>
-                    {editingId ? 'Save Changes' : 'Publish Activity'}
-                  </Text>
+                <Text style={styles.inputLabel}>Date</Text>
+                <TouchableOpacity style={styles.timePickerButton} onPress={() => setShowDatePicker(true)}>
+                  <Ionicons name="calendar-outline" size={20} color="#0d9488" />
+                  <Text style={styles.timePickerText}>{formatDateLabel(activityDate)}</Text>
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={activityDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onDateChange}
+                    minimumDate={new Date()}
+                  />
                 )}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+                {Platform.OS === 'ios' && showDatePicker && (
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.doneLink}>
+                    <Text style={styles.doneLinkText}>Done</Text>
+                  </TouchableOpacity>
+                )}
 
-      <AppTimePickerModal
-        visible={showTimePicker}
-        value={timeValue}
-        onClose={() => setShowTimePicker(false)}
-        onConfirm={(selected) => {
-          setTimeValue(selected);
-          setTime(formatTime(selected));
-          setShowTimePicker(false);
-        }}
-      />
+                <Text style={styles.inputLabel}>Time</Text>
+                <TouchableOpacity
+                  style={styles.timePickerButton}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Ionicons name="time-outline" size={20} color="#0d9488" />
+                  <Text style={[styles.timePickerText, !time && styles.timePickerPlaceholder]}>
+                    {time || 'Select a time'}
+                  </Text>
+                </TouchableOpacity>
 
-      <LocationMapPickerModal
-        visible={showMapModal}
-        locationName={locationName}
-        onClose={closeMapPicker}
-        onConfirm={confirmMapSelection}
-        onSuggestLocationName={setLocationName}
-      />
+                <Text style={styles.inputLabel}>Title</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Activity title"
+                  placeholderTextColor="#94a3b8"
+                  value={title}
+                  onChangeText={setTitle}
+                />
+
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput
+                  style={[styles.input, { height: 90, textAlignVertical: 'top' }]}
+                  placeholder="What should members know?"
+                  placeholderTextColor="#94a3b8"
+                  multiline
+                  value={description}
+                  onChangeText={setDescription}
+                />
+
+                <Text style={styles.inputLabel}>Location Name (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Liberty Park"
+                  placeholderTextColor="#94a3b8"
+                  value={locationName}
+                  onChangeText={setLocationName}
+                />
+
+                <TouchableOpacity style={styles.mapTriggerButton} onPress={openMapPicker}>
+                  <Ionicons name="map-outline" size={20} color="#0d9488" />
+                  <Text style={styles.mapTriggerText}>
+                    {locationUrl
+                      ? 'Location Selected ✓ (Tap to Change)'
+                      : '📍 Search & Select Location on Map'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setModalVisible(false)}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={handleSave}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={styles.saveText}>{isSubmitting ? 'Saving…' : 'Save'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
+        <AppTimePickerModal
+          visible={showTimePicker}
+          value={timeValue}
+          onClose={() => setShowTimePicker(false)}
+          onConfirm={(next) => {
+            setTimeValue(next);
+            setTime(formatTime12h(next));
+            setShowTimePicker(false);
+          }}
+        />
+
+        <LocationMapPickerModal
+          visible={showMapModal}
+          locationName={locationName}
+          onClose={closeMapPicker}
+          onConfirm={confirmMapSelection}
+          onSuggestLocationName={setLocationName}
+        />
+      </SafeAreaView>
     </LinearGradient>
   );
 }
@@ -382,25 +393,32 @@ export default function ManageActivities() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  headerRow: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 0,
-    paddingBottom: 12,
+    paddingVertical: 12,
   },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
   addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#0d9488',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 10,
   },
-  addButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
-  listContent: { paddingHorizontal: 16, paddingBottom: 40 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  addButtonText: { color: '#ffffff', fontWeight: '700' },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   dayBadge: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#ffffff',
     backgroundColor: '#0d9488',
@@ -408,141 +426,93 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     overflow: 'hidden',
+    textTransform: 'uppercase',
   },
-  timeText: { fontSize: 12, fontWeight: '600', color: '#64748b' },
-  activityTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 6 },
-  activityDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
-  locationBadge: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    backgroundColor: '#f0fdfa',
-    borderColor: '#ccfbf1',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  dayBadgePast: { backgroundColor: '#94a3b8' },
+  pastLabel: { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
+  cardTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
+  cardDescription: { fontSize: 14, color: '#64748b', lineHeight: 20 },
+  locationButton: { marginTop: 10 },
+  locationText: { fontSize: 13, fontWeight: '600', color: '#0d9488' },
+  cardActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 16,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
-  locationBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0d9488',
-  },
-  actionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 12 },
-  editBtn: {
-    backgroundColor: '#ccfbf1',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  editText: { color: '#0d9488', fontWeight: '700', fontSize: 12 },
-  deleteBtn: {
-    backgroundColor: '#fee2e2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  deleteText: { color: '#ef4444', fontWeight: '700', fontSize: 12 },
-  emptyText: {
-    textAlign: 'center',
-    color: '#64748b',
-    marginTop: 50,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  editText: { fontWeight: '700', color: '#0d9488' },
+  deleteText: { fontWeight: '700', color: '#ef4444' },
+  emptyText: { textAlign: 'center', color: '#64748b', marginTop: 40, fontWeight: '600' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  modalCard: {
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '85%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '90%',
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    paddingBottom: 12,
-  },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
-  closeModalText: { color: '#ef4444', fontSize: 15, fontWeight: '600' },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  dayPickerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 16,
-  },
-  daySelectorChip: {
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    flex: 1,
-    alignItems: 'center',
-  },
-  activeDayChip: { backgroundColor: '#0d9488' },
-  dayChipText: { fontSize: 11, fontWeight: '600', color: '#475569' },
-  activeDayChipText: { color: '#ffffff', fontWeight: '700' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
+  inputLabel: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 6, marginTop: 8 },
   input: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     fontSize: 15,
-    backgroundColor: '#f8fafc',
     color: '#0f172a',
-    marginBottom: 16,
+    backgroundColor: '#f8fafc',
   },
-  textArea: { height: 90, textAlignVertical: 'top' },
   timePickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderWidth: 1.5,
+    gap: 8,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     backgroundColor: '#f8fafc',
-    marginBottom: 16,
   },
   timePickerText: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
   timePickerPlaceholder: { color: '#94a3b8', fontWeight: '400' },
+  doneLink: { alignSelf: 'flex-end', marginTop: 4, marginBottom: 4 },
+  doneLinkText: { color: '#0d9488', fontWeight: '700' },
   mapTriggerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1.5,
+    gap: 8,
+    borderWidth: 1,
     borderColor: '#ccfbf1',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 16,
-  },
-  mapTriggerText: { fontSize: 15, fontWeight: '700', color: '#0d9488' },
-  submitButton: {
-    backgroundColor: '#0d9488',
+    backgroundColor: '#f0fdfa',
     borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginTop: 10,
   },
-  submitButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  disabledButton: { opacity: 0.5 },
+  mapTriggerText: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0d9488' },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 20, marginBottom: 8 },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  cancelText: { fontWeight: '700', color: '#475569' },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#0d9488',
+    alignItems: 'center',
+  },
+  saveText: { fontWeight: '700', color: '#ffffff' },
 });

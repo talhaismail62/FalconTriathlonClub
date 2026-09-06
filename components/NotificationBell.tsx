@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -76,9 +76,6 @@ export default function NotificationBell() {
     </TouchableOpacity>
   );
 }
-
-// Added missing Text import above for the badge
-import { Text } from 'react-native';
 
 const styles = StyleSheet.create({
   container: {
